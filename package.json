@@ -1,0 +1,54 @@
+{
+  "name": "promoeye",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PromoEye — monitora de hora em hora as melhores promoções de Black Friday em lojas confiáveis",
+  "engines": {
+    "node": ">=22.11.0"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm-run-all --parallel dev:server dev:admin",
+    "dev:server": "npm run dev --workspace @promoeye/server",
+    "dev:admin": "npm run dev --workspace @promoeye/admin",
+    "build": "npm run build --workspace @promoeye/shared && npm run build --workspace @promoeye/admin && npm run build --workspace @promoeye/server",
+    "start": "npm run start --workspace @promoeye/server",
+    "typecheck": "tsc --build",
+    "test": "node scripts/vitest.mjs run",
+    "test:watch": "node scripts/vitest.mjs",
+    "db:up": "docker compose up -d db",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx --env-file-if-exists=.env prisma/seed.ts",
+    "collect": "tsx --env-file-if-exists=.env apps/server/src/cli/collect.ts",
+    "create-admin": "tsx --env-file-if-exists=.env apps/server/src/cli/create-admin.ts",
+    "probe": "tsx --env-file-if-exists=.env apps/server/src/cli/probe.ts"
+  },
+  "prisma": {
+    "seed": "tsx --env-file-if-exists=.env prisma/seed.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "npm-run-all2": "^7.0.2",
+    "prisma": "^6.19.3",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "tsx": "^4.23.9"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "prisma@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "esbuild@0.28.2": true,
+    "argon2@0.41.1": true
+  }
+}

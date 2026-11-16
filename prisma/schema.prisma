@@ -1,0 +1,274 @@
+// PromoEye — modelo de dados.
+//
+// O coração é: WatchItem (o que você quer acompanhar) × Store (onde procurar)
+// → Offer (um anúncio daquele item naquela loja) → PricePoint (histórico).
+// O histórico é o que separa promoção de verdade do "metade do dobro".
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Acesso ao painel ─────────────────────────────────────────────────────────
+
+model AdminUser {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime       @default(now())
+  lastLoginAt  DateTime?
+  sessions     AdminSession[]
+}
+
+model AdminSession {
+  id        String    @id // token aleatório de 32 bytes; o cookie carrega ele assinado
+  userId    String
+  user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  userAgent String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ── Lojas ───────────────────────────────────────────────────────────────────
+
+enum StoreAdapter {
+  VTEX // API pública de busca das lojas VTEX (Americanas, Carrefour, Brastemp…)
+  KABUM // API JSON que o próprio site do KaBuM! usa
+  AMAZON // página de busca da Amazon.com.br
+  MANUAL // a loja bloqueia robôs: as ofertas entram à mão pelo painel
+}
+
+enum SellerPolicy {
+  OFFICIAL_ONLY // só a própria loja ou vendedores da lista de confiáveis
+  ALL // qualquer vendedor do marketplace
+}
+
+model Store {
+  id                String       @id // slug estável: "amazon", "kabum", "americanas"…
+  name              String
+  domain            String
+  adapter           StoreAdapter
+  /// Configuração do adaptador (ex.: { "baseUrl": "...", "mode": "isearch" }).
+  config            Json         @default("{}")
+  enabled           Boolean      @default(true)
+  sellerPolicy      SellerPolicy @default(OFFICIAL_ONLY)
+  /// Afiliado da loja inteira. Duas formas:
+  ///  - parâmetro: "tag=seutag-20" é anexado à URL do produto;
+  ///  - modelo:    "https://rede.exemplo/?url={url_encoded}" embrulha a URL.
+  affiliateTemplate String?
+  /// Por que a loja é confiável (aparece na vitrine).
+  trustNote         String?
+  sortOrder         Int          @default(100)
+  lastOkAt          DateTime?
+  lastErrorAt       DateTime?
+  lastError         String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  offers            Offer[]
+}
+
+// ── O que acompanhar ────────────────────────────────────────────────────────
+
+model WatchItem {
+  id             String         @id @default(cuid())
+  slug           String         @unique
+  name           String // "iPhone 16 128GB"
+  query          String // o que é digitado na busca de cada loja
+  /// Termos que TODOS precisam aparecer no título. Vazio = os termos da busca.
+  /// Alternativas com "|": "128gb|128 gb".
+  mustInclude    String[]       @default([])
+  /// Termos que descartam o anúncio ("pro", "capa", "usado"…).
+  mustExclude    String[]       @default([])
+  /// Abaixo disso é acessório ou erro: descarta.
+  minPrice       Decimal?       @db.Decimal(12, 2)
+  /// Preço-alvo: abaixo dele vira alerta.
+  targetPrice    Decimal?       @db.Decimal(12, 2)
+  /// Desconto real mínimo (contra o nosso histórico) para virar "promoção".
+  minDiscountPct Int?
+  /// Lojas onde procurar. Vazio = todas as ativas.
+  storeIds       String[]       @default([])
+  category       String?
+  active         Boolean        @default(true)
+  sortOrder      Int            @default(100)
+  notes          String?
+  lastRunAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  offers         Offer[]
+  snapshots      ItemSnapshot[]
+}
+
+// ── Anúncios encontrados ────────────────────────────────────────────────────
+
+enum OfferSource {
+  AUTO
+  MANUAL
+}
+
+model Offer {
+  id             String         @id @default(cuid())
+  watchItemId    String
+  watchItem      WatchItem      @relation(fields: [watchItemId], references: [id], onDelete: Cascade)
+  storeId        String
+  store          Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  source         OfferSource    @default(AUTO)
+  externalId     String // SKU/ASIN/id do produto na loja
+  title          String
+  url            String
+  imageUrl       String?
+  sellerName     String?
+  soldByStore    Boolean?
+  /// Melhor preço à vista (Pix/boleto quando a loja informa).
+  price          Decimal        @db.Decimal(12, 2)
+  /// Preço "de" que a loja anuncia.
+  listPrice      Decimal?       @db.Decimal(12, 2)
+  /// Preço no cartão, quando difere do à vista.
+  cardPrice      Decimal?       @db.Decimal(12, 2)
+  installments   String?
+  promoLabel     String? // ex.: "ESQUENTA BLACK DAS BLACKS"
+  available      Boolean        @default(true)
+  /// Quando o coletor deixou de ver o anúncio (some da busca ≠ esgotou).
+  missingSince   DateTime?
+  firstSeenAt    DateTime       @default(now())
+  lastSeenAt     DateTime       @default(now())
+  lastChangeAt   DateTime       @default(now())
+  lowestPrice    Decimal        @db.Decimal(12, 2)
+  lowestPriceAt  DateTime       @default(now())
+  highestPrice   Decimal        @db.Decimal(12, 2)
+  /// Link de afiliado colado à mão. Vence o modelo da loja.
+  affiliateUrl   String?
+  hidden         Boolean        @default(false)
+  pinned         Boolean        @default(false)
+  /// 0–100. Recalculado a cada coleta (ver collector/scoring.ts).
+  score          Float          @default(0)
+  /// Selos: "menor-preco", "abaixo-do-alvo", "mais-barato", "preco-de-inflado"…
+  flags          String[]       @default([])
+  /// Desconto real: contra a mediana dos últimos 30 dias que NÓS vimos.
+  realDiscountPct Float?
+  isDeal         Boolean        @default(false)
+  dealSince      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  history        PricePoint[]
+  clicks         Click[]
+  messages       OutboundMessage[]
+
+  @@unique([watchItemId, storeId, externalId])
+  @@index([watchItemId, isDeal])
+  @@index([isDeal, score])
+}
+
+model PricePoint {
+  id        String   @id @default(cuid())
+  offerId   String
+  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  price     Decimal  @db.Decimal(12, 2)
+  listPrice Decimal? @db.Decimal(12, 2)
+  available Boolean
+  at        DateTime @default(now())
+
+  @@index([offerId, at])
+}
+
+/// Um retrato por item por coleta: o menor preço entre todas as lojas.
+/// É o que desenha o gráfico da vitrine sem varrer o histórico inteiro.
+model ItemSnapshot {
+  id          String    @id @default(cuid())
+  watchItemId String
+  watchItem   WatchItem @relation(fields: [watchItemId], references: [id], onDelete: Cascade)
+  runId       String?
+  at          DateTime  @default(now())
+  minPrice    Decimal?  @db.Decimal(12, 2)
+  minOfferId  String?
+  minStoreId  String?
+  offerCount  Int       @default(0)
+
+  @@index([watchItemId, at])
+}
+
+// ── Execuções do coletor ────────────────────────────────────────────────────
+
+enum RunStatus {
+  RUNNING
+  OK
+  PARTIAL // terminou, mas alguma loja falhou
+  FAILED
+}
+
+model CollectorRun {
+  id            String    @id @default(cuid())
+  trigger       String // "schedule" | "manual" | "cli"
+  status        RunStatus @default(RUNNING)
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  itemsChecked  Int       @default(0)
+  requests      Int       @default(0)
+  offersSeen    Int       @default(0)
+  offersNew     Int       @default(0)
+  priceChanges  Int       @default(0)
+  newDeals      Int       @default(0)
+  /// [{ store, item, message }]
+  errors        Json      @default("[]")
+  /// Amostra do que o filtro descartou e por quê: [{ store, item, title, price, reason }].
+  /// Mostra na vitrine e no painel que o filtro trabalha, com casos reais.
+  rejects       Json      @default("[]")
+
+  @@index([startedAt])
+}
+
+// ── Cliques e mensagens ─────────────────────────────────────────────────────
+
+model Click {
+  id       String   @id @default(cuid())
+  offerId  String
+  offer    Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  at       DateTime @default(now())
+  /// Só o domínio de origem; nada de IP (LGPD).
+  referrer String?
+  channel  String? // "site" | "whatsapp"
+
+  @@index([offerId, at])
+}
+
+enum MessageStatus {
+  DRAFT // pronta para copiar/enviar
+  SENT
+  DISCARDED
+  FAILED
+}
+
+/// Fila de saída para o grupo de WhatsApp. Hoje: copiar e colar.
+/// Amanhã: um provedor (Evolution API, Z-API, Cloud API) consome esta fila.
+model OutboundMessage {
+  id        String        @id @default(cuid())
+  channel   String        @default("whatsapp")
+  offerId   String?
+  offer     Offer?        @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  /// Preço que gerou a mensagem; evita repetir a mesma promoção.
+  price     Decimal?      @db.Decimal(12, 2)
+  reason    String? // "menor-preco", "abaixo-do-alvo"…
+  body      String
+  status    MessageStatus @default(DRAFT)
+  error     String?
+  createdAt DateTime      @default(now())
+  sentAt    DateTime?
+
+  @@index([status, createdAt])
+  @@index([offerId])
+}
+
+// ── Configurações gerais ────────────────────────────────────────────────────
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}

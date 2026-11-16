@@ -1,0 +1,294 @@
+{% extends "layout.njk" %}
+{% from "partials/_macros.njk" import offerRow, thumb, chip %}
+{% set useMoments = true %}
+
+{% block main %}
+{# ── 1. HERÓI (collage): o texto em span-5; a janela do PromoEye com os itens de verdade, cortada pela
+      borda do quadro; um cartão que conta, em três passos, como um item real foi conferido. ── #}
+<section class="hero hero--collage" data-enter aria-labelledby="hero-h">
+  <div class="wrap"><div class="hero-text grid hero__grid">
+    <div class="hero__text span-5">
+      <h1 id="hero-h">Promoções de Black Friday em {{ counts.autoStores }} lojas</h1>
+      <p class="hero__lead">O {{ site.title }} busca cada item de hora em hora na Amazon, no KaBuM!, na Americanas e em mais {{ counts.autoStores - 3 }} lojas oficiais, compara com o histórico de preço e mostra o desconto real.</p>
+      <div class="btn-row">
+        <a class="btn btn--primary" href="#ofertas">Ver as promoções<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+        {% if site.whatsappInvite %}<a class="btn btn--secondary" href="{{ site.whatsappInvite }}" rel="noopener">Entrar no grupo do WhatsApp</a>{% else %}<a class="btn btn--secondary" href="#como-funciona">Ver como funciona</a>{% endif %}
+      </div>
+      <p class="hero__proof">Black Friday {% if bf.days == 0 %}é hoje{% elif bf.days == 1 %}é amanhã{% else %}em {{ bf.days }} dias{% endif %}, {{ bf.date | dateLong }}.{% if lastRunAt %} Última coleta às {{ lastRunAt | hourBR }}.{% endif %}</p>
+    </div>
+
+    <div class="hero__art span-6 start-7" role="img" aria-label="A lista de itens do {{ site.title }} com o menor preço de cada um{% if story and story.best %}, e {{ story.name }} conferido em {{ story.storeCount }} lojas, mais barato na {{ story.best.storeName }}{% endif %}">
+      <div class="ly-piece ly-piece--main d-win" aria-hidden="true">
+        <div class="d-win__bar"><span class="d-win__dots"><i></i><i></i><i></i></span><span>{{ site.title }} · Black Friday {{ year }}</span></div>
+        <div class="d-win__body">
+          <div class="d-side">
+            <span class="is-on"><i></i>Itens</span><span><i></i>Promoções</span><span><i></i>Lojas</span><span><i></i>Histórico</span>
+            <span class="d-side__label">Agora</span>
+            <span><i></i>{{ counts.offers }} ofertas</span><span><i></i>{{ counts.autoStores }} lojas</span>
+          </div>
+          <div class="d-main">
+            <div class="d-main__head"><h4>Itens acompanhados</h4><span class="d-btn">Buscar agora</span></div>
+            <div class="d-tabs"><span class="is-on">Todos {{ counts.items }}</span><span>Promoções {{ counts.deals }}</span></div>
+            <div class="d-rows">
+              {% for it in itemsWithOffers %}{% if loop.index <= 6 %}
+              <div class="d-row">
+                {% if it.best.imageUrl %}<img src="{{ it.best.imageUrl }}" alt="" referrerpolicy="no-referrer">{% else %}<span class="d-thumb"></span>{% endif %}
+                <div><b>{{ it.name }}</b><small>{{ it.best.storeName }} · {{ it.storeCount }} {{ 'loja' if it.storeCount == 1 else 'lojas' }}</small></div>
+                <span class="num">{{ it.best.price | brlShort }}</span>
+                {% if it.best.isDeal %}<span class="d-chip">Promoção</span>{% elif it.inflated %}<span class="d-chip d-chip--low">“De” inflado</span>{% else %}<span class="d-chip d-chip--plain">Conferido</span>{% endif %}
+              </div>
+              {% endif %}{% endfor %}
+              {% if not itemsWithOffers.length %}
+              <div class="d-row"><span class="d-thumb"></span><div><b>Nenhum item ainda</b><small>A primeira coleta sai no minuto 5</small></div><span class="num"></span><span class="d-chip d-chip--plain">Aguardando</span></div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+      {% if story and story.best %}
+      <div class="ly-piece ly-piece--note d-card" aria-hidden="true" data-ly-steps="700">
+        <div class="d-card__row"><h5>{{ story.name }}</h5><span class="d-chip" data-step data-step-at="4">Mais barato</span></div>
+        {% if story.inflated %}
+        <div class="d-note__line" data-step><i class="warn">!</i><span>“De” <b>{{ story.inflated.listPrice | brlShort }}</b> na {{ story.inflated.storeName }} não é real</span></div>
+        {% else %}
+        <div class="d-note__line" data-step><i class="warn">!</i><span><b>Usado e vitrine</b> ficaram de fora</span></div>
+        {% endif %}
+        <div class="d-note__line" data-step><i>✓</i><span>Conferido em <b>{{ story.storeCount }} lojas</b>{% if lastRunAt %} às {{ lastRunAt | hourBR }}{% endif %}</span></div>
+        <div class="d-note__line" data-step><i>✓</i><span>{{ story.best.storeName }}, <b>{{ story.best.price | brl }}</b></span></div>
+      </div>
+      {% endif %}
+    </div>
+  </div></div>
+</section>
+
+{# ── 2. APP-FRAME: o produto em uso. A lista de itens é um tablist de verdade: escolher um item mostra
+      as ofertas dele à direita, com o link para a loja. A primeira aba junta as promoções do momento. ── #}
+<section class="section" id="ofertas" aria-labelledby="ofertas-h" style="--h: 1; --hm: 2">
+  <div class="wrap">
+    <div class="grid">
+      <div class="section-head span-5"><h2 id="ofertas-h">O menor preço de cada item, agora</h2></div>
+      <p class="span-6 start-7 ofertas__intro">Escolha um item na lista para ver as ofertas dele nas lojas confiáveis, da mais barata para a mais cara, cada uma com os seus selos.{% if itemsWithOffers.length %} <a class="link" href="/ofertas/{{ itemsWithOffers[0].slug }}">Ver o histórico de preço</a>{% endif %}</p>
+    </div>
+
+    <div class="ui app fill" data-ui-pause-host>
+      <div class="app__pane app__pane--list">
+        <div class="ui-panel ui-win">
+          <div class="ui-win__bar">
+            <span class="ui-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="ui-win__crumb">{{ site.title }} <i>/</i> <b>Itens</b></span>
+            <span class="ui-spacer"></span>
+            {% if lastRunAt %}<span class="app__when">Atualizado às {{ lastRunAt | hourBR }}</span>{% endif %}
+          </div>
+          <div class="ui-win__body">
+            <div class="ui-win__main">
+              <ul class="ui-win__rows app-list" role="tablist" aria-label="Itens acompanhados" aria-orientation="vertical">
+                {% set firstSel = true %}
+                {% if deals.length %}
+                <li class="ui-win__row app-row" role="tab" id="tab-deals" aria-controls="panel-deals" aria-selected="true" tabindex="0">
+                  <span class="app-row__icon" aria-hidden="true">%</span>
+                  <span class="ui-win__who">Promoções de verdade</span>
+                  <span class="ui-win__sub">{{ counts.deals }} agora, em {{ counts.dealItems }} {{ 'item' if counts.dealItems == 1 else 'itens' }}</span>
+                  <span class="app-row__price"></span>
+                </li>
+                {% set firstSel = false %}
+                {% endif %}
+                {% for it in itemsWithOffers %}{% if loop.index <= 9 %}
+                <li class="ui-win__row app-row" role="tab" id="tab-{{ it.id }}" aria-controls="panel-{{ it.id }}" aria-selected="{{ 'true' if (firstSel and loop.first) else 'false' }}" tabindex="{{ '0' if (firstSel and loop.first) else '-1' }}">
+                  {{ thumb(it.best.imageUrl, 'app-row__img') }}
+                  <span class="ui-win__who">{{ it.name }}</span>
+                  <span class="ui-win__sub">{{ it.best.storeName }} · {{ it.offerCount }} {{ 'oferta' if it.offerCount == 1 else 'ofertas' }}</span>
+                  <span class="app-row__price">{{ it.best.price | brlShort }}</span>
+                </li>
+                {% endif %}{% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="app__pane app__pane--open">
+        {% if deals.length %}
+        <div class="app-open" role="tabpanel" id="panel-deals" aria-labelledby="tab-deals">
+          <div class="app-open__head"><h3>Promoções de verdade</h3><p>Abaixo do preço normal ou do preço-alvo, em lojas confiáveis.</p></div>
+          <ul class="pe-offers">{% for o in deals %}{% if loop.index <= 5 %}{{ offerRow(o, true) }}{% endif %}{% endfor %}</ul>
+        </div>
+        {% endif %}
+        {% for it in itemsWithOffers %}{% if loop.index <= 9 %}
+        <div class="app-open" role="tabpanel" id="panel-{{ it.id }}" aria-labelledby="tab-{{ it.id }}"{% if not (firstSel and loop.first) %} hidden{% endif %}>
+          <div class="app-open__head">
+            <h3>{{ it.name }}</h3>
+            <p>{{ it.offerCount }} {{ 'oferta' if it.offerCount == 1 else 'ofertas' }} em {{ it.storeCount }} {{ 'loja' if it.storeCount == 1 else 'lojas' }}{% if it.targetPrice %} · seu alvo: {{ it.targetPrice | brlShort }}{% endif %}</p>
+            <a class="link" href="/ofertas/{{ it.slug }}">Ver todas e o histórico</a>
+          </div>
+          <ul class="pe-offers">{% for o in it.offers %}{% if loop.index <= 5 %}{{ offerRow(o) }}{% endif %}{% endfor %}</ul>
+        </div>
+        {% endif %}{% endfor %}
+        {% if not itemsWithOffers.length %}
+        <div class="app-open"><div class="app-open__head"><h3>A lista começa na próxima coleta</h3><p>Os itens aparecem aqui assim que o primeiro preço for conferido.</p></div></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+{# ── 3. STEPS na faixa de superfície (rhythm surface-pairs), com o momento dealt: a fileira de lojas. ── #}
+<section class="section ground-surface" id="como-funciona" aria-labelledby="como-h">
+  <div class="wrap">
+    <div class="section-head"><h2 id="como-h">Como o {{ site.title }} confere um preço, em 3 passos</h2></div>
+    <div class="grid steps">
+      <article class="card card--row span-4">
+        <span class="step-num">1</span>
+        <h3>Busca cada item de hora em hora</h3>
+        <p>No minuto 5 de cada hora, em {{ counts.autoStores }} lojas, pela mesma busca que o site da loja usa.</p>
+        <div class="panel"><div class="stage stage--fade-b"><div class="ui ui-panel pe-mini">
+          <div class="pe-mini__head"><b>Coleta</b>{% if lastRunAt %}<span>{{ lastRunAt | hourBR }}</span>{% endif %}</div>
+          <ul class="pe-mini__rows">
+            {% for s in stores %}{% if s.auto and s.offers > 0 and loop.index <= 6 %}
+            <li><span class="pe-dot pe-dot--{{ 'ok' if s.ok else 'off' }}" aria-hidden="true"></span>{{ s.name }}<em>{{ s.offers }} {{ 'oferta' if s.offers == 1 else 'ofertas' }}</em></li>
+            {% endif %}{% endfor %}
+          </ul>
+        </div></div></div>
+      </article>
+      <article class="card card--row span-4">
+        <span class="step-num">2</span>
+        <h3>Tira o que não é o item</h3>
+        <p>Usado, vitrine, capinha, o modelo vizinho e vendedor desconhecido ficam de fora, com o motivo anotado.</p>
+        <div class="panel"><div class="stage stage--fade-b"><div class="ui ui-panel pe-mini">
+          <div class="pe-mini__head"><b>Descartados na última coleta</b></div>
+          <ul class="pe-mini__rows pe-mini__rows--rej">
+            {% for r in rejects %}<li><span class="pe-x" aria-hidden="true">✕</span><span class="pe-rej"><b>{{ r.title | truncate(46, true, '…') }}</b><small>{{ r.store }} · {{ r.reason }}</small></span></li>{% endfor %}
+            {% if not rejects.length %}<li><span class="pe-x" aria-hidden="true">✕</span><span class="pe-rej"><b>A lista sai com a primeira coleta</b><small>Cada descarte vem com o motivo</small></span></li>{% endif %}
+          </ul>
+        </div></div></div>
+      </article>
+      <article class="card card--row span-4">
+        <span class="step-num">3</span>
+        <h3>Compara com o histórico e as lojas</h3>
+        <p>O desconto conta contra o preço típico dos últimos 30 dias, nunca contra o preço “de” da loja.</p>
+        <div class="panel"><div class="stage stage--fade-b"><div class="ui ui-panel pe-mini">
+          {% if story and story.best %}
+          <div class="pe-mini__head"><b>{{ story.name }}</b><span>{{ story.storeCount }} lojas</span></div>
+          <ul class="pe-mini__rows pe-bars">
+            {% set top = story.byStore | last %}
+            {% for b in story.byStore %}
+            <li><span class="pe-bars__store">{{ b.storeName }}</span><span class="pe-bars__bar{% if loop.first %} is-best{% endif %}" style="--w: {{ ((b.price / top.price) * 100) | round }}%"></span><em>{{ b.price | brlShort }}</em></li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <div class="pe-mini__head"><b>Menor preço entre as lojas</b></div>
+          {% endif %}
+        </div></div></div>
+      </article>
+    </div>
+    {% if marquee.length >= 6 %}
+    <div class="stores-row">
+      <p class="t-label">Lojas conferidas de hora em hora{% if manualStores.length %}; {{ manualStores | join(', ') }} entram à mão{% endif %}</p>
+      <div data-moment="marquee-row" data-moment-opts='{"speed": 36}'>
+        <ul class="mo-mq__track">{% for s in marquee %}<li>{{ s }}</li>{% endfor %}</ul>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{# ── 4. TABS-TOUR, ainda na faixa de superfície: os três selos que separam promoção de preço falso. ── #}
+<section class="section ground-surface" id="selos" aria-labelledby="selos-h">
+  <div class="wrap">
+    <div class="grid">
+      <div class="span-5 selos__text">
+        <div class="section-head">
+          <h2 id="selos-h">Selos que separam promoção de preço falso</h2>
+          <p>Cada oferta ganha selos conforme o histórico que registramos.</p>
+        </div>
+        <div class="tabs" role="tablist" aria-label="Selos">
+          <button class="tab" type="button" role="tab" id="tab-real" aria-controls="tp-real ts-real" aria-selected="true">Medir o desconto real</button>
+          <button class="tab" type="button" role="tab" id="tab-de" aria-controls="tp-de ts-de" aria-selected="false" tabindex="-1">Checar o preço “de”</button>
+          <button class="tab" type="button" role="tab" id="tab-alta" aria-controls="tp-alta ts-alta" aria-selected="false" tabindex="-1">Achar a alta escondida</button>
+        </div>
+        <div class="tab-panel" role="tabpanel" id="tp-real" aria-labelledby="tab-real">
+          <p>O preço de agora é comparado com o preço típico dos últimos 30 dias, pesado pelo tempo que cada preço durou. Só conta como promoção quando fica abaixo dele.</p>
+          <a class="link" href="#ofertas">Ver as promoções de verdade</a>
+        </div>
+        <div class="tab-panel" role="tabpanel" id="tp-de" aria-labelledby="tab-de" hidden>
+          <p>Quando o preço “de” é bem maior do que qualquer preço que já vimos, em qualquer loja, o anúncio ganha o selo e o “de” deixa de ser mostrado.</p>
+          <a class="link" href="#ofertas">Ver os preços de agora</a>
+        </div>
+        <div class="tab-panel" role="tabpanel" id="tp-alta" aria-labelledby="tab-alta" hidden>
+          <p>Se o preço subiu nas semanas anteriores e a “queda” só devolve o valor de antes, a oferta é marcada e não entra nas promoções.</p>
+          <a class="link" href="#perguntas">Ler as perguntas</a>
+        </div>
+      </div>
+
+      <div class="frame frame--split span-6 start-7">
+        <div class="stage stage--fade-br">
+          <div class="selos__screen" id="ts-real">
+            <div class="ui ui-panel pe-chart">
+              <div class="pe-chart__head"><b>Preço nos últimos 30 dias</b><span class="pe-chip pe-chip--good">Desconto real</span></div>
+              <svg viewBox="0 0 400 200" role="img" aria-label="Linha do preço ao longo de 30 dias, estável e depois mais baixa no fim; uma linha tracejada marca o preço típico">
+                <path class="pe-chart__typ" d="M10 80 H390"/>
+                <path class="pe-chart__line" d="M10 80 H120 V74 H210 V82 H300 V140 H390"/>
+                <circle class="pe-chart__dot" cx="390" cy="140" r="6"/>
+                <text x="16" y="70">preço típico</text>
+                <text x="300" y="166">agora</text>
+              </svg>
+            </div>
+          </div>
+          <div class="selos__screen" id="ts-de" hidden>
+            <div class="ui ui-panel pe-chart">
+              {% if inflatedExample %}
+              <div class="pe-chart__head"><b>{{ inflatedExample.itemName }} · {{ inflatedExample.storeName }}</b><span class="pe-chip pe-chip--warn">Preço “de” inflado</span></div>
+              <div class="pe-de">
+                <p class="pe-de__claim">A loja anuncia <s>de {{ inflatedExample.listPrice | brl }}</s></p>
+                <p class="pe-de__now">por <b>{{ inflatedExample.price | brl }}</b></p>
+                <p class="pe-de__note">Nenhuma loja confiável cobra perto de {{ inflatedExample.listPrice | brlShort }} por este item agora. O “de” sai da vitrine.</p>
+              </div>
+              {% else %}
+              <div class="pe-chart__head"><b>Preço “de” contra o histórico</b><span class="pe-chip pe-chip--warn">Preço “de” inflado</span></div>
+              <svg viewBox="0 0 400 200" role="img" aria-label="O preço anunciado como anterior fica muito acima de toda a linha de preços registrada">
+                <path class="pe-chart__claim" d="M10 30 H390"/>
+                <path class="pe-chart__line" d="M10 130 H160 V124 H260 V132 H390"/>
+                <text x="16" y="22">preço “de” anunciado</text>
+                <text x="16" y="154">preços que registramos</text>
+              </svg>
+              {% endif %}
+            </div>
+          </div>
+          <div class="selos__screen" id="ts-alta" hidden>
+            <div class="ui ui-panel pe-chart">
+              <div class="pe-chart__head"><b>Subiu antes de baixar</b><span class="pe-chip pe-chip--warn">Não é promoção</span></div>
+              <svg viewBox="0 0 400 200" role="img" aria-label="O preço sobe no meio do mês e depois volta ao mesmo nível do começo">
+                <path class="pe-chart__typ" d="M10 130 H390"/>
+                <path class="pe-chart__line" d="M10 130 H140 V60 H290 V130 H390"/>
+                <circle class="pe-chart__dot" cx="390" cy="130" r="6"/>
+                <text x="150" y="50">a alta</text>
+                <text x="300" y="156">a “queda”</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{# ── 5. FAQ: respostas abertas, no split da página. ── #}
+<section class="section" id="perguntas" aria-labelledby="perguntas-h">
+  <div class="wrap">
+    <div class="grid">
+      <div class="span-5">
+        <div class="section-head">
+          <h2 id="perguntas-h">Perguntas</h2>
+          <p>O que mais perguntam sobre os preços e os links.</p>
+        </div>
+      </div>
+      <div class="faq span-6 start-7">
+        <div class="faq__item"><h3>O {{ site.title }} vende alguma coisa?</h3><p>Não. O clique leva você à loja, e a compra é feita lá. Alguns links são de afiliado: a loja pode nos pagar comissão, e o preço para você é o mesmo.</p></div>
+        <div class="faq__item"><h3>De quanto em quanto tempo o preço muda aqui?</h3><p>De hora em hora, no minuto 5.{% if lastRunAt %} A última coleta foi às {{ lastRunAt | hourBR }}.{% endif %} O preço na loja pode mudar entre uma coleta e outra.</p></div>
+        <div class="faq__item"><h3>Quais lojas entram?</h3><p>{{ counts.autoStores }} automaticamente, entre grandes varejistas e lojas oficiais de fabricantes.{% if manualStores.length %} {{ manualStores | join(', ') }} bloqueiam robôs, então as ofertas delas entram à mão.{% endif %}</p></div>
+        <div class="faq__item"><h3>Aparece vendedor de marketplace?</h3><p>Só os de uma lista de confiáveis, como Magazine Luiza, Fast Shop e iPlace vendendo na Americanas. Vendedor desconhecido fica de fora.</p></div>
+        <div class="faq__item"><h3>Como receber as promoções no WhatsApp?</h3><p>{% if site.whatsappInvite %}Pelo grupo: <a class="link" href="{{ site.whatsappInvite }}" rel="noopener">Entrar no grupo do WhatsApp</a>{% else %}O grupo está sendo preparado. Ele vai receber só as promoções de verdade, com o link de cada uma.{% endif %}</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

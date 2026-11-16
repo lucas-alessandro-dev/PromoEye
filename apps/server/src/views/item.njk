@@ -1,0 +1,50 @@
+{% extends "layout.njk" %}
+{% from "partials/_macros.njk" import offerRow %}
+
+{% block main %}
+<div class="item-page">
+<section class="section" aria-labelledby="item-h">
+  <div class="wrap">
+    <div class="item-head">
+      <p class="t-label"><a class="link" href="/#ofertas">Todos os itens</a></p>
+      <h1 id="item-h">{{ item.name }}: menor preço agora</h1>
+      <p class="t-lead">{% if best %}{{ offers.length }} {{ 'oferta' if offers.length == 1 else 'ofertas' }} em {{ storeCount }} {{ 'loja confiável' if storeCount == 1 else 'lojas confiáveis' }}{% if item.lastRunAt %}, conferidas às {{ item.lastRunAt | hourBR }}{% endif %}.{% if item.targetPrice %} Seu preço-alvo: {{ item.targetPrice | brl }}.{% endif %}{% else %}Ainda não há oferta deste item nas lojas confiáveis. A próxima coleta sai no minuto 5.{% endif %}</p>
+    </div>
+
+    {% if best %}
+    <div class="item-best">
+      <div>
+        <p class="t-label">Mais barato agora na {{ best.storeName }}</p>
+        <p class="item-best__price">{{ best.price | brl }}</p>
+        {% if best.flags.length %}<p class="pe-offer__flags">{% for f in best.flags %}<span class="pe-chip pe-chip--{{ f.tone }}" title="{{ f.id | flagHint }}">{{ f.id | flagLabel }}</span>{% endfor %}</p>{% endif %}
+      </div>
+      <a class="btn btn--primary" href="{{ best.href }}" rel="sponsored nofollow noopener">Ir à {{ best.storeName }}<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+    </div>
+    {% endif %}
+
+    <div class="item-chart">
+      <h2>Menor preço entre as lojas, últimos 30 dias</h2>
+      {% if chart %}
+      <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-label="Menor preço entre as lojas de {{ chart.from | dateBR }} a {{ chart.to | dateBR }}: mínimo de {{ chart.low | brl }}, máximo de {{ chart.high | brl }}">
+        <path class="item-chart__area" d="{{ chart.area }}"/>
+        <path class="item-chart__line" d="{{ chart.d }}"/>
+        <circle class="item-chart__min" cx="{{ chart.min.x }}" cy="{{ chart.min.y }}" r="6"/>
+      </svg>
+      <p class="item-chart__legend"><span>Mínimo: <b>{{ chart.low | brl }}</b> em {{ chart.min.at | dateBR }}</span><span>Máximo: {{ chart.high | brl }}</span><span>Agora: {{ chart.last.price | brl }}</span></p>
+      {% else %}
+      <p class="muted">O gráfico aparece a partir da segunda coleta. Cada hora acrescenta um ponto.</p>
+      {% endif %}
+    </div>
+
+    {% if offers.length %}
+    <div class="item-offers">
+      <h2>Todas as ofertas, da mais barata para a mais cara</h2>
+      <ul class="pe-offers">{% for o in offers %}{{ offerRow(o) }}{% endfor %}</ul>
+    </div>
+    {% endif %}
+  </div>
+</section>
+</div>
+{% endblock %}
+
+{% block closeTitle %}Outros itens com preço conferido{% endblock %}

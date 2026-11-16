@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+**/dist
+**/dist-types
+.env
+.env.*
+!.env.example
+.git
+.taste-skill
+shots
+coverage
+*.log

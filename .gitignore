@@ -1,0 +1,20 @@
+node_modules/
+dist/
+dist-types/
+build/
+.env
+.env.*
+!.env.example
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+coverage/
+.vite/
+*.tsbuildinfo
+.tmp/
+apps/server/src/views/admin-index.html
+
+# Arquivos de trabalho da taste-skill (direção sorteada, capturas do inspetor).
+.taste-skill/
+shots/

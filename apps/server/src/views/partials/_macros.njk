@@ -1,0 +1,24 @@
+{# Peças da vitrine. Uma só definição por peça: o selo, a linha de oferta, o preço. #}
+
+{% macro chip(flag) %}<span class="pe-chip pe-chip--{{ flag.tone }}" title="{{ flag.id | flagHint }}">{{ flag.id | flagLabel }}</span>{% endmacro %}
+
+{% macro thumb(url, cls='') %}{% if url %}<img class="pe-thumb {{ cls }}" src="{{ url }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="pe-thumb pe-thumb--empty {{ cls }}" aria-hidden="true"></span>{% endif %}{% endmacro %}
+
+{# Uma oferta numa lista: foto, título, loja (e vendedor), preço, "de" e selos, e o link para a loja. #}
+{% macro offerRow(o, showItem=false) %}
+<li class="pe-offer">
+  {{ thumb(o.imageUrl) }}
+  <div class="pe-offer__text">
+    {% if showItem %}<span class="pe-offer__item">{{ o.itemName }}</span>{% endif %}
+    <a class="pe-offer__title" href="{{ o.href }}" rel="sponsored nofollow noopener">{{ o.title }}</a>
+    <span class="pe-offer__meta">{{ o.storeName }}{% if o.sellerName %} · vendido por {{ o.sellerName }}{% endif %}{% if o.installments %} · {{ o.installments }}{% endif %}</span>
+    {% if o.flags.length %}<span class="pe-offer__flags">{% for f in o.flags %}{% if loop.index <= 3 %}{{ chip(f) }}{% endif %}{% endfor %}</span>{% endif %}
+  </div>
+  <div class="pe-offer__price">
+    {% if o.showList %}<s class="pe-offer__list" aria-label="Preço anterior anunciado">{{ o.listPrice | brlShort }}</s>{% endif %}
+    <b>{{ o.price | brl }}</b>
+    {% if o.realOff %}<span class="pe-offer__off">{{ o.realOff | pct }} abaixo do normal</span>{% endif %}
+    <a class="pe-go" href="{{ o.href }}" rel="sponsored nofollow noopener" aria-label="Ir à {{ o.storeName }}: {{ o.title }}">Ir à loja</a>
+  </div>
+</li>
+{% endmacro %}
