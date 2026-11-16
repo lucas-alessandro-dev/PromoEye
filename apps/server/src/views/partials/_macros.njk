@@ -1,12 +1,41 @@
-{# Peças da vitrine. Uma só definição por peça: o selo, a linha de oferta, o preço. #}
+{# Peças da vitrine. Uma só definição por peça: o selo, o cartão de produto, a linha de oferta. #}
 
 {% macro chip(flag) %}<span class="pe-chip pe-chip--{{ flag.tone }}" title="{{ flag.id | flagHint }}">{{ flag.id | flagLabel }}</span>{% endmacro %}
 
 {% macro thumb(url, cls='') %}{% if url %}<img class="pe-thumb {{ cls }}" src="{{ url }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="pe-thumb pe-thumb--empty {{ cls }}" aria-hidden="true"></span>{% endif %}{% endmacro %}
 
+{# Preço grande no jeito das lojas: "R$ 3.220" com os centavos em sobrescrito. #}
+{% macro bigPrice(value, cls) %}{% set pp = value | priceParts %}<span class="{{ cls }}"><span class="sr-only">{{ value | brl }}</span><span aria-hidden="true"><span class="{{ cls }}-cur">R$</span>{{ pp.int }}<sup>{{ pp.cents }}</sup></span></span>{% endmacro %}
+
+{# Um item na listagem. O cartão inteiro leva à página do item; a loja fica a um clique de lá. #}
+{% macro productCard(c) %}
+<li class="pc{% if not c.best %} pc--empty{% endif %}">
+  <a class="pc__link" href="{{ c.href }}">
+    <span class="pc__media">
+      {% if c.imageUrl %}<img src="{{ c.imageUrl }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% else %}<span class="pc__noimg" aria-hidden="true"></span>{% endif %}
+      {% if c.isDeal %}<span class="pc__tag">Promoção de verdade</span>{% endif %}
+    </span>
+    <span class="pc__body">
+      <h3 class="pc__title">{{ c.name }}</h3>
+      {% if c.best %}
+      <span class="pc__was">{% if c.best.showList %}<s><span class="sr-only">Preço anunciado antes: </span>{{ c.best.listPrice | brl }}</s>{% endif %}</span>
+      <span class="pc__row">{{ bigPrice(c.best.price, 'pc__price') }}{% if c.best.listOff %}<span class="pc__off">{{ c.best.listOff | pct }} OFF</span>{% endif %}</span>
+      {% if c.best.installments %}<span class="pc__inst">{{ c.best.installments }}</span>{% endif %}
+      <span class="pc__store">Menor preço · <b>{{ c.best.storeName }}</b></span>
+      <span class="pc__cmp"><span class="pc__cmp-dot" aria-hidden="true"></span>Comparado em {{ c.storeCount }} {{ 'loja' if c.storeCount == 1 else 'lojas' }}</span>
+      {% if c.flags.length %}<span class="pc__flags">{% for f in c.flags %}{{ chip(f) }}{% endfor %}</span>{% endif %}
+      {% else %}
+      <span class="pc__none">{% if c.soldOutStores %}Esgotado nas lojas pesquisadas{% else %}Sem oferta nas lojas agora{% endif %}</span>
+      <span class="pc__cmp">Ver as lojas e o histórico</span>
+      {% endif %}
+    </span>
+  </a>
+</li>
+{% endmacro %}
+
 {# Uma oferta numa lista: foto, título, loja (e vendedor), preço, "de" e selos, e o link para a loja. #}
 {% macro offerRow(o, showItem=false) %}
-<li class="pe-offer">
+<li class="pe-offer{% if not o.available %} pe-offer--off{% endif %}">
   {{ thumb(o.imageUrl) }}
   <div class="pe-offer__text">
     {% if showItem %}<span class="pe-offer__item">{{ o.itemName }}</span>{% endif %}
@@ -15,10 +44,10 @@
     {% if o.flags.length %}<span class="pe-offer__flags">{% for f in o.flags %}{% if loop.index <= 3 %}{{ chip(f) }}{% endif %}{% endfor %}</span>{% endif %}
   </div>
   <div class="pe-offer__price">
-    {% if o.showList %}<s class="pe-offer__list" aria-label="Preço anterior anunciado">{{ o.listPrice | brlShort }}</s>{% endif %}
+    {% if not o.available %}<span class="pe-offer__soldout">Esgotado</span>{% elif o.showList %}<s class="pe-offer__list"><span class="sr-only">Preço anunciado antes: </span>{{ o.listPrice | brlShort }}</s>{% endif %}
     <b>{{ o.price | brl }}</b>
     {% if o.realOff %}<span class="pe-offer__off">{{ o.realOff | pct }} abaixo do normal</span>{% endif %}
-    <a class="pe-go" href="{{ o.href }}" rel="sponsored nofollow noopener" aria-label="Ir à {{ o.storeName }}: {{ o.title }}">Ir à loja</a>
+    {% if o.available %}<a class="pe-go" href="{{ o.href }}" rel="sponsored nofollow noopener" aria-label="Ir para a loja {{ o.storeName }}: {{ o.title }}">Ir para a loja</a>{% endif %}
   </div>
 </li>
 {% endmacro %}

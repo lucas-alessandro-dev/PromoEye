@@ -2,7 +2,7 @@
 
 Confere de hora em hora o preço dos itens que você escolhe, em lojas confiáveis, e separa promoção de verdade do "metade do dobro" da Black Friday. Vitrine pública com link de afiliado, painel para administrar e fila de mensagens para um grupo de WhatsApp.
 
-- **Vitrine**: `/`, com o menor preço de cada item e as promoções de verdade, mais uma página por item (`/ofertas/<slug>`) com o histórico.
+- **Vitrine**: `/`, uma listagem no jeito das grandes lojas (busca, categorias, "só promoções", ordenação, um cartão por item com o menor preço). Cada cartão abre `/ofertas/<slug>`: fotos, caixa de compra, **todas as lojas pesquisadas** com a situação de cada uma (preço, esgotado, não encontrado, não respondeu, manual) e o **histórico** do menor preço em 7, 30 ou 90 dias.
 - **Painel**: `/painel`, para itens, ofertas, lojas, afiliados, WhatsApp e configurações.
 - **Coletor**: roda dentro do servidor, no minuto 5 de cada hora (`COLLECT_CRON`).
 - **Redirecionamento**: `/ir/<id>`. Todo clique para a loja passa por aqui, que aplica o afiliado e conta o clique (sem guardar IP).
@@ -87,16 +87,20 @@ Próxima etapa: um provedor consome a mesma fila (`OutboundMessage`, status `DRA
 
 ## Produção
 
+Roda na VPS da Hostinger, que hospeda outros projetos também, atrás de um Caddy compartilhado que cuida do HTTPS. Para atualizar, no Git Bash:
+
 ```bash
-# no servidor, com .env preenchido (PUBLIC_URL com o domínio, COLLECT_ENABLED=true)
-docker compose --profile prod up -d --build
+bash ops/vps/deploy.sh
 ```
 
-O app escuta em `127.0.0.1:3010`, atrás do Nginx com HTTPS e `TRUST_PROXY=true`. Na subida, o `ops/entrypoint.sh` aplica as migrações e o seed das lojas.
+Na subida, o `ops/entrypoint.sh` aplica as migrações e o seed das lojas. Organização no servidor, primeira instalação, domínio, backups e comandos: [docs/deploy-vps.md](docs/deploy-vps.md).
+
+Para testar a imagem de produção no seu computador: `docker compose --profile prod up -d --build` (app em `127.0.0.1:${APP_PORT}`).
 
 ## Design
 
 - **Tokens**: [awesome-design-skills](https://github.com/bergside/awesome-design-skills), estilo **stitch** (petróleo #072C2C, laranja #FF5F03, superfície #EDEADE). Usados como estão no painel. Na vitrine o laranja foi escurecido para **#E95603**, para passar 3:1 nos dois fundos.
+- **Loja e página do item** (desde 16/11/2026): o herói e a "janela do app" da home deram lugar a uma listagem em grade, e a página do item virou página de produto. Peças em `apps/server/src/views/partials/_macros.njk`, estilos em `apps/server/public/site/site.css`, cursor do gráfico e galeria em `apps/server/public/site/shop.js` (melhoria progressiva: tudo funciona sem JavaScript). O "preço típico" só aparece com 1 dia de acompanhamento.
 - **Vitrine**: [taste-skill](https://github.com/Leonxlnx/taste-skill) 2.5. Kit em `apps/server/public/assets` (MIT, sem edição). Sorteio: herói `collage`, nav-centre, close-word, footer-dark, faixa de superfície, botões arrow, marca dots, fundo sky, seções steps + tabs-tour, momento `marquee-row`, fonte Mona Sans. O registro completo está no topo de `apps/server/src/views/layout.njk`.
 - Os scripts da taste-skill (dealer, `consistency.mjs`, `check.mjs`, `gate.mjs`) **não foram executados** nesta sessão. Os sorteios foram refeitos com as mesmas regras e a verificação foi feita com capturas próprias (`scripts/shoot.mjs`): em 1440×900 e 768×1024 cada seção ocupa exatamente 1 ou 2 telas. Para rodar o portão oficial, clone a skill e rode `node <skill>/scripts/gate.mjs http://localhost:3000/`.
 

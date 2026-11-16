@@ -1,0 +1,75 @@
+# PromoEye na VPS compartilhada.
+#
+# Este arquivo é copiado para /srv/apps/promoeye/compose.yml a cada deploy
+# (ops/vps/up.sh). Lá, o código fica em ./src e os segredos em ./.env.
+#
+# Nenhuma porta é publicada no host. O Caddy de /srv/proxy chega no app pela
+# rede compartilhada "proxy", com o apelido promoeye-app. O Postgres só existe
+# na rede interna deste projeto, sem saída para a internet.
+name: promoeye
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-promoeye}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: ${POSTGRES_DB:-promoeye}
+      LANG: pt_BR.utf8
+      TZ: America/Sao_Paulo
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks: [internal]
+    mem_limit: 768m
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-promoeye} -d ${POSTGRES_DB:-promoeye}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: ./src
+      dockerfile: ops/Dockerfile
+    image: promoeye-app:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      PUBLIC_URL: ${PUBLIC_URL:?defina PUBLIC_URL no .env}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-promoeye}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-promoeye}?schema=public
+      SESSION_SECRET: ${SESSION_SECRET:?defina SESSION_SECRET no .env}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-24}
+      COLLECT_CRON: ${COLLECT_CRON:-5 * * * *}
+      COLLECT_ENABLED: ${COLLECT_ENABLED:-true}
+      COLLECT_STORE_DELAY_MS: ${COLLECT_STORE_DELAY_MS:-1500}
+      COLLECT_TIMEOUT_MS: ${COLLECT_TIMEOUT_MS:-15000}
+      # Um salto só: o Caddy.
+      TRUST_PROXY: 'true'
+      TZ: America/Sao_Paulo
+    networks:
+      internal: {}
+      proxy:
+        # Nome único na rede compartilhada: outros projetos também terão um "app".
+        aliases: [promoeye-app]
+    mem_limit: 1g
+    healthcheck:
+      test: ['CMD-SHELL', 'node -e "fetch(\"http://127.0.0.1:3000/healthz\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  internal:
+    internal: true
+  proxy:
+    external: true
+
+volumes:
+  db-data:

@@ -1,0 +1,32 @@
+# Proxy compartilhado da VPS: o único serviço com portas abertas (80/443).
+# Instalado em /srv/proxy pelo ops/vps/bootstrap.sh. Atende todos os projetos.
+#
+# Cada projeto:
+#   1. põe o serviço web na rede externa "proxy", com um apelido único;
+#   2. cria /srv/proxy/caddy/sites/<projeto>.caddy apontando para esse apelido;
+#   3. roda: docker compose -f /srv/proxy/compose.yml exec caddy caddy reload --config /etc/caddy/Caddyfile
+# O Caddy emite e renova o certificado HTTPS sozinho.
+name: proxy
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./caddy:/etc/caddy:ro
+      - data:/data
+      - config:/config
+    networks: [proxy]
+    mem_limit: 256m
+
+networks:
+  proxy:
+    external: true
+
+volumes:
+  data:
+  config:

@@ -1,18 +1,25 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { daysUntilBlackFriday, flagTone, listDiscount } from '@promoeye/shared'
-import type { Offer, Store, WatchItem } from '@prisma/client'
+import type { Offer, PricePoint, Store, WatchItem } from '@prisma/client'
 import { publicUrl } from '../config.js'
 import { num, numReq, prisma } from '../lib/prisma.js'
 import { render } from '../lib/render.js'
+import { normalize } from '../lib/text.js'
 import { currentUser } from '../plugins/auth.js'
 import { FRESH_MS } from '../collector/run.js'
 import { nextRunAt } from '../collector/scheduler.js'
+import { typicalPrice } from '../collector/scoring.js'
 import { getSettings } from '../services/settings.js'
 
 /**
  * Vitrine pública. Tudo aqui é lido do banco; nenhuma página dispara busca
  * nas lojas (isso é trabalho do coletor, de hora em hora).
+ *
+ *   /                 listagem no estilo das lojas: busca, categorias, ordem e um cartão por item
+ *   /ofertas/:slug    página do item: todas as lojas pesquisadas e o histórico de preço
  */
+
+const DAY = 86_400_000
 
 export interface CardVM {
   id: string
@@ -35,6 +42,7 @@ export interface CardVM {
   sellerName: string | null
   promoLabel: string | null
   isDeal: boolean
+  available: boolean
   lastSeenAt: Date
 }
 
@@ -48,6 +56,7 @@ export function cardVM(o: OfferFull): CardVM {
   const inflated = o.flags.includes('preco-de-inflado')
   const off = listDiscount(price, listPrice)
   const flags = FLAG_ORDER.filter((f) => o.flags.includes(f)).map((id) => ({ id, tone: flagTone(id) }))
+  const showList = Boolean(listPrice && off && off >= 0.03 && !inflated)
   return {
     id: o.id,
     href: `/ir/${o.id}`,
@@ -59,8 +68,8 @@ export function cardVM(o: OfferFull): CardVM {
     imageUrl: o.imageUrl,
     price,
     listPrice,
-    showList: Boolean(listPrice && off && off >= 0.03 && !inflated),
-    listOff: off,
+    showList,
+    listOff: showList ? off : null,
     realOff: o.realDiscountPct && o.realDiscountPct >= 0.03 ? o.realDiscountPct : null,
     flags,
     warn: flags.some((f) => f.tone === 'warn'),
@@ -68,17 +77,21 @@ export function cardVM(o: OfferFull): CardVM {
     sellerName: o.soldByStore ? null : o.sellerName,
     promoLabel: o.promoLabel,
     isDeal: o.isDeal,
+    available: o.available,
     lastSeenAt: o.lastSeenAt,
   }
 }
 
-const freshWhere = () => ({
+/** Anúncio "de agora": visto na última coleta (ou cadastrado à mão). Esgotado entra; quem filtra é quem usa. */
+const currentWhere = () => ({
   hidden: false,
-  available: true,
   store: { enabled: true },
   watchItem: { active: true },
   OR: [{ source: 'MANUAL' as const }, { lastSeenAt: { gte: new Date(Date.now() - FRESH_MS) } }],
 })
+const freshWhere = () => ({ ...currentWhere(), available: true })
+const isCurrent = (o: Offer, now: Date) => o.source === 'MANUAL' || o.lastSeenAt.getTime() >= now.getTime() - FRESH_MS
+const byPrice = (a: Offer, b: Offer) => numReq(a.price) - numReq(b.price)
 
 async function gate(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
   const settings = await getSettings()
@@ -112,40 +125,232 @@ async function baseContext() {
   }
 }
 
-/** Linha em degrau do menor preço por coleta, desenhada no servidor (SVG). */
-function priceChart(points: { at: Date; price: number }[], width = 720, height = 220) {
-  if (points.length < 2) return null
-  const pad = { l: 8, r: 8, t: 16, b: 16 }
-  const xs = points.map((p) => p.at.getTime())
-  const ys = points.map((p) => p.price)
-  const x0 = Math.min(...xs)
-  const x1 = Math.max(...xs)
-  // Folga em cima e embaixo: a linha nunca encosta no chão nem no teto do gráfico.
-  const lo = Math.min(...ys)
-  const hi = Math.max(...ys)
-  const span = Math.max(hi - lo, hi * 0.04)
-  const y0 = lo - span * 0.35
-  const y1 = hi + span * 0.15
-  const X = (t: number) => pad.l + ((t - x0) / Math.max(1, x1 - x0)) * (width - pad.l - pad.r)
-  const Y = (v: number) => pad.t + (1 - (v - y0) / Math.max(1, y1 - y0)) * (height - pad.t - pad.b)
-  let d = `M${X(xs[0]!).toFixed(1)},${Y(ys[0]!).toFixed(1)}`
-  for (let i = 1; i < points.length; i++) {
-    d += ` H${X(xs[i]!).toFixed(1)} V${Y(ys[i]!).toFixed(1)}`
+// ── Cartão de produto (a listagem) ─────────────────────────────────────────────────────────────
+
+export interface ProductCardVM {
+  id: string
+  slug: string
+  name: string
+  category: string | null
+  href: string
+  imageUrl: string | null
+  best: CardVM | null
+  /** O maior desconto honesto do melhor anúncio: o real (contra o histórico) ou o do "de" que não é inflado. */
+  off: number | null
+  storeCount: number
+  offerCount: number
+  storeNames: string[]
+  soldOutStores: number
+  isDeal: boolean
+  flags: { id: string; tone: string }[]
+  inflated: CardVM | null
+  byStore: { storeId: string; storeName: string; price: number }[]
+  sortOrder: number
+  createdAt: Date
+}
+
+function productCards(items: WatchItem[], offers: OfferFull[]): ProductCardVM[] {
+  const byItem = new Map<string, OfferFull[]>()
+  for (const o of offers) byItem.set(o.watchItemId, [...(byItem.get(o.watchItemId) ?? []), o])
+
+  return items.map((item) => {
+    const all = byItem.get(item.id) ?? []
+    const avail = all.filter((o) => o.available).sort(byPrice)
+    const best = avail[0] ? cardVM(avail[0]) : null
+    const storeIds = [...new Set(avail.map((o) => o.storeId))]
+    const soldOut = new Set(all.filter((o) => !o.available).map((o) => o.storeId))
+    for (const id of storeIds) soldOut.delete(id)
+    const inflated = avail
+      .filter((o) => o.flags.includes('preco-de-inflado'))
+      .sort((a, b) => (num(b.listPrice) ?? 0) - (num(a.listPrice) ?? 0))[0]
+    return {
+      id: item.id,
+      slug: item.slug,
+      name: item.name,
+      category: item.category,
+      href: `/ofertas/${item.slug}`,
+      imageUrl: best?.imageUrl ?? all.find((o) => o.imageUrl)?.imageUrl ?? null,
+      best,
+      off: best ? Math.max(best.realOff ?? 0, best.listOff ?? 0) || null : null,
+      storeCount: storeIds.length,
+      offerCount: avail.length,
+      storeNames: storeIds.map((id) => avail.find((o) => o.storeId === id)!.store.name),
+      soldOutStores: soldOut.size,
+      isDeal: avail.some((o) => o.isDeal),
+      flags: best?.flags.slice(0, 2) ?? [],
+      inflated: inflated ? cardVM(inflated) : null,
+      byStore: storeIds.map((id) => {
+        const o = avail.find((x) => x.storeId === id)!
+        return { storeId: id, storeName: o.store.name, price: numReq(o.price) }
+      }),
+      sortOrder: item.sortOrder,
+      createdAt: item.createdAt,
+    }
+  })
+}
+
+async function loadProductCards(items: WatchItem[]): Promise<ProductCardVM[]> {
+  if (!items.length) return []
+  const offers = await prisma.offer.findMany({
+    where: { ...currentWhere(), watchItemId: { in: items.map((i) => i.id) } },
+    include: { store: true, watchItem: true },
+  })
+  return productCards(items, offers)
+}
+
+// ── Listagem: busca, categoria, só promoções e ordem, tudo na URL (funciona sem JavaScript) ────
+
+const ORDERS = {
+  relevancia: 'Mais relevantes',
+  'menor-preco': 'Menor preço',
+  'maior-preco': 'Maior preço',
+  desconto: 'Maior desconto',
+  lojas: 'Mais lojas',
+} as const
+type Order = keyof typeof ORDERS
+
+interface ShopState {
+  q: string
+  cat: string
+  promo: boolean
+  ordem: Order
+}
+
+function shopHref(state: ShopState, patch: Partial<ShopState>): string {
+  const s = { ...state, ...patch }
+  const p = new URLSearchParams()
+  if (s.q) p.set('q', s.q)
+  if (s.cat) p.set('cat', s.cat)
+  if (s.promo) p.set('promo', '1')
+  if (s.ordem !== 'relevancia') p.set('ordem', s.ordem)
+  const qs = p.toString()
+  return `/${qs ? `?${qs}` : ''}#ofertas`
+}
+
+function sortCards(cards: ProductCardVM[], ordem: Order): ProductCardVM[] {
+  const has = (c: ProductCardVM) => (c.best ? 0 : 1) // sem oferta vai para o fim, em qualquer ordem
+  const base = (a: ProductCardVM, b: ProductCardVM) => a.sortOrder - b.sortOrder || a.createdAt.getTime() - b.createdAt.getTime()
+  const by: Record<Order, (a: ProductCardVM, b: ProductCardVM) => number> = {
+    relevancia: (a, b) => Number(b.isDeal) - Number(a.isDeal) || base(a, b),
+    'menor-preco': (a, b) => (a.best?.price ?? 0) - (b.best?.price ?? 0),
+    'maior-preco': (a, b) => (b.best?.price ?? 0) - (a.best?.price ?? 0),
+    desconto: (a, b) => (b.off ?? 0) - (a.off ?? 0) || base(a, b),
+    lojas: (a, b) => b.storeCount - a.storeCount || base(a, b),
   }
-  const minIdx = ys.indexOf(Math.min(...ys))
+  return [...cards].sort((a, b) => has(a) - has(b) || by[ordem](a, b))
+}
+
+// ── Gráficos (desenhados no servidor; o JavaScript só acrescenta o cursor) ─────────────────────
+
+interface Point {
+  at: Date
+  price: number
+  storeId?: string | null
+}
+
+/** Passos "redondos" para o eixo: 1, 2, 2,5 ou 5 × 10^k. */
+function niceTicks(lo: number, hi: number, count = 4): number[] {
+  const span = Math.max(hi - lo, Math.abs(hi) * 0.02, 1)
+  const raw = span / count
+  const mag = 10 ** Math.floor(Math.log10(raw))
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag
+  const ticks: number[] = []
+  for (let v = Math.floor(lo / step) * step; v <= hi + step * 0.001; v += step) ticks.push(Math.round(v * 100) / 100)
+  if (ticks[ticks.length - 1]! < hi) ticks.push(ticks[ticks.length - 1]! + step)
+  return ticks
+}
+
+/**
+ * O menor preço entre as lojas ao longo do tempo, em degrau. As coordenadas
+ * saem em 0–1000 (o SVG estica com preserveAspectRatio="none" e o traço não
+ * engorda); rótulos, pontos e cursor são HTML posicionado em %, para o texto
+ * ficar do mesmo tamanho no celular e no computador.
+ */
+function historyChart(points: Point[], now: Date, typical: number | null, days: number) {
+  if (points.length < 2) return null
+  const x0 = points[0]!.at.getTime()
+  const x1 = now.getTime()
+  if (x1 - x0 < 30 * 60_000) return null
+  const prices = points.map((p) => p.price)
+  const lo = Math.min(...prices, typical ?? Infinity)
+  const hi = Math.max(...prices, typical ?? -Infinity)
+  const ticks = niceTicks(lo, hi)
+  const y0 = ticks[0]!
+  const y1 = ticks[ticks.length - 1]!
+  const X = (t: number) => ((t - x0) / Math.max(1, x1 - x0)) * 1000
+  const Y = (v: number) => (1 - (v - y0) / Math.max(1, y1 - y0)) * 1000
+  const f = (n: number) => n.toFixed(1)
+
+  let d = `M${f(X(x0))},${f(Y(points[0]!.price))}`
+  for (let i = 1; i < points.length; i++) d += ` H${f(X(points[i]!.at.getTime()))} V${f(Y(points[i]!.price))}`
+  d += ` H1000`
+
+  const minIdx = prices.indexOf(Math.min(...prices))
+  const maxIdx = prices.indexOf(Math.max(...prices))
+  const span = x1 - x0
+  const fmt: Intl.DateTimeFormatOptions = span < 2 * DAY
+    ? { hour: '2-digit', minute: '2-digit' }
+    : { day: '2-digit', month: '2-digit' }
+  const xTicks = [0, 0.25, 0.5, 0.75, 1].map((k) => ({
+    pct: k * 100,
+    label: new Date(x0 + k * span).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', ...fmt }),
+  }))
+
   return {
-    width,
-    height,
     d,
-    area: `${d} V${height - pad.b} H${X(xs[0]!).toFixed(1)} Z`,
-    min: { x: X(xs[minIdx]!), y: Y(ys[minIdx]!), price: ys[minIdx]!, at: points[minIdx]!.at },
-    last: { x: X(xs[xs.length - 1]!), y: Y(ys[ys.length - 1]!), price: ys[ys.length - 1]! },
-    low: Math.min(...ys),
-    high: Math.max(...ys),
-    from: new Date(x0),
-    to: new Date(x1),
+    area: `${d} V1000 H0 Z`,
+    yTicks: ticks.map((v) => ({ value: v, pct: Y(v) / 10 })),
+    xTicks,
+    typical: typical === null ? null : { value: typical, pct: Y(typical) / 10 },
+    min: { pct: { x: X(points[minIdx]!.at.getTime()) / 10, y: Y(prices[minIdx]!) / 10 }, price: prices[minIdx]!, at: points[minIdx]!.at, storeId: points[minIdx]!.storeId ?? null },
+    max: { price: prices[maxIdx]!, at: points[maxIdx]!.at },
+    last: { pct: { x: 100, y: Y(prices[prices.length - 1]!) / 10 }, price: prices[prices.length - 1]! },
+    first: points[0]!.at,
+    days,
+    // Para o cursor: um ponto por mudança, em % do gráfico.
+    data: points.map((p) => ({ x: +(X(p.at.getTime()) / 10).toFixed(2), y: +(Y(p.price) / 10).toFixed(2), t: p.at.toISOString(), v: p.price, s: p.storeId ?? null })),
   }
 }
+
+/** Menor preço de uma loja em cada momento: junta o histórico de todos os anúncios dela. */
+function storeSeries(offers: (Offer & { history: PricePoint[] })[], since: Date, now: Date): Point[] {
+  const times = new Set<number>([since.getTime()])
+  for (const o of offers) for (const h of o.history) if (h.at > since) times.add(h.at.getTime())
+  const out: Point[] = []
+  for (const t of [...times].sort((a, b) => a - b)) {
+    let min: number | null = null
+    for (const o of offers) {
+      // o anúncio vale do primeiro ponto até a última vez em que foi visto
+      if (o.history[0] && o.history[0].at.getTime() > t) continue
+      if (o.source !== 'MANUAL' && o.lastSeenAt.getTime() + FRESH_MS < t) continue
+      const h = [...o.history].reverse().find((p) => p.at.getTime() <= t)
+      if (h?.available) min = min === null ? numReq(h.price) : Math.min(min, numReq(h.price))
+    }
+    if (min !== null && out[out.length - 1]?.price !== min) out.push({ at: new Date(t), price: min })
+  }
+  return out
+}
+
+/** Mini-gráfico de uma loja (120×32), na mesma janela de tempo do gráfico grande. */
+function sparkline(points: Point[], since: Date, now: Date) {
+  if (!points.length) return null
+  const x0 = Math.max(since.getTime(), points[0]!.at.getTime())
+  const x1 = now.getTime()
+  // Menos de 2 h de dado não diz nada sobre a loja ("preço estável" depois de meia hora seria exagero).
+  if (x1 - x0 < 2 * 3_600_000) return null
+  const prices = points.map((p) => p.price)
+  const lo = Math.min(...prices)
+  const hi = Math.max(...prices)
+  const flat = hi - lo < 0.01
+  const X = (t: number) => 2 + ((Math.max(t, x0) - x0) / (x1 - x0)) * 116
+  const Y = (v: number) => (flat ? 16 : 4 + (1 - (v - lo) / (hi - lo)) * 24)
+  let d = `M${X(points[0]!.at.getTime()).toFixed(1)},${Y(prices[0]!).toFixed(1)}`
+  for (let i = 1; i < points.length; i++) d += ` H${X(points[i]!.at.getTime()).toFixed(1)} V${Y(prices[i]!).toFixed(1)}`
+  d += ` H118`
+  return { d, endY: Y(prices[prices.length - 1]!), lo, hi, flat }
+}
+
+// ── Rotas ──────────────────────────────────────────────────────────────────────────────────────
 
 export async function siteRoutes(app: FastifyInstance) {
   app.get('/robots.txt', async (_req, reply) => {
@@ -164,91 +369,51 @@ export async function siteRoutes(app: FastifyInstance) {
       .send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join('')}</urlset>`)
   })
 
-  app.get('/', async (request, reply) => {
+  app.get<{ Querystring: { q?: string; cat?: string; promo?: string; ordem?: string } }>('/', async (request, reply) => {
     if (!(await gate(request, reply))) return reply
     const base = await baseContext()
-    const include = { store: true, watchItem: true } as const
 
-    const [items, deals, stores, offerCount, lastRun, dealTotal] = await Promise.all([
+    const [items, stores, offerCount, lastRun, dealTotal] = await Promise.all([
       prisma.watchItem.findMany({ where: { active: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] }),
-      prisma.offer.findMany({
-        where: { ...freshWhere(), isDeal: true },
-        include,
-        orderBy: [{ pinned: 'desc' }, { score: 'desc' }],
-        take: 40,
-      }),
       prisma.store.findMany({ where: { enabled: true }, orderBy: { sortOrder: 'asc' } }),
       prisma.offer.count({ where: freshWhere() }),
       prisma.collectorRun.findFirst({ where: { status: { in: ['OK', 'PARTIAL'] } }, orderBy: { startedAt: 'desc' } }),
       prisma.offer.count({ where: { ...freshWhere(), isDeal: true } }),
     ])
+    const cards = await loadProductCards(items)
 
-    // Por item: as ofertas de agora, da mais barata à mais cara.
-    const itemsVM = await Promise.all(
-      items.map(async (item) => {
-        const where = { ...freshWhere(), watchItemId: item.id }
-        const [offers, count, storesWith, inflated] = await Promise.all([
-          prisma.offer.findMany({ where, include, orderBy: [{ price: 'asc' }], take: 6 }),
-          prisma.offer.count({ where }),
-          prisma.offer.groupBy({ by: ['storeId'], where, _min: { price: true } }),
-          prisma.offer.findFirst({
-            where: { ...where, flags: { has: 'preco-de-inflado' } },
-            include,
-            orderBy: { listPrice: 'desc' },
-          }),
-        ])
-        const cards = offers.map(cardVM)
-        return {
-          id: item.id,
-          name: item.name,
-          slug: item.slug,
-          category: item.category,
-          targetPrice: num(item.targetPrice),
-          best: cards[0] ?? null,
-          offers: cards,
-          offerCount: count,
-          storeCount: storesWith.length,
-          dealCount: cards.filter((c) => c.isDeal).length,
-          inflated: inflated ? cardVM(inflated) : null,
-          // o menor preço de cada loja: a comparação "entre lojas" do passo 3
-          byStore: storesWith
-            .map((g) => ({ storeId: g.storeId, price: num(g._min.price) ?? 0 }))
-            .sort((a, b) => a.price - b.price),
-        }
-      })
-    )
-    const withOffers = itemsVM.filter((i) => i.best)
-
-    // Variedade primeiro (até duas por item); depois completa até 5 com as de maior pontuação.
-    const perItem = new Map<string, number>()
-    const picked = new Set<string>()
-    const topDeals: CardVM[] = []
-    for (const d of deals) {
-      const n = perItem.get(d.watchItemId) ?? 0
-      if (n >= 2) continue
-      perItem.set(d.watchItemId, n + 1)
-      picked.add(d.id)
-      topDeals.push(cardVM(d))
-      if (topDeals.length >= 5) break
+    // Estado da listagem, só com valores conhecidos (o resto da URL é ignorado).
+    const categories = [...new Set(items.map((i) => i.category).filter((c): c is string => Boolean(c)))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+    const qRaw = String(request.query.q ?? '').trim().slice(0, 80)
+    const state: ShopState = {
+      q: qRaw,
+      cat: categories.includes(String(request.query.cat ?? '')) ? String(request.query.cat) : '',
+      promo: request.query.promo === '1',
+      ordem: (Object.keys(ORDERS) as Order[]).includes(request.query.ordem as Order) ? (request.query.ordem as Order) : 'relevancia',
     }
-    for (const d of deals) {
-      if (topDeals.length >= 5) break
-      if (!picked.has(d.id)) topDeals.push(cardVM(d))
+    const qTerms = normalize(state.q).split(' ').filter(Boolean)
+    const matches = (c: ProductCardVM) => {
+      if (state.cat && c.category !== state.cat) return false
+      if (state.promo && !c.isDeal) return false
+      if (qTerms.length) {
+        const hay = ` ${normalize(`${c.name} ${c.category ?? ''} ${c.storeNames.join(' ')}`)} `
+        return qTerms.every((t) => hay.includes(t))
+      }
+      return true
     }
-    const dealItems = new Set(deals.map((d) => d.watchItemId)).size
+    const shown = sortCards(cards.filter(matches), state.ordem)
+    const filtered = Boolean(state.q || state.cat || state.promo)
 
-    // O cartão do herói conta a história de UM item real: em quantas lojas
-    // foi conferido, que preço "de" foi desmascarado, quem tem o menor preço.
+    // As seções de baixo ("como funciona" e selos) contam a história de UM item real.
+    const withOffers = cards.filter((c) => c.best)
     const story = [...withOffers].sort((a, b) => b.storeCount - a.storeCount || b.offerCount - a.offerCount)[0] ?? null
-
-    // Oferta com preço "de" inflado para a aba que explica o selo (real, quando há).
     const inflatedExample = withOffers.map((i) => i.inflated).find(Boolean) ?? null
 
     const autoStores = stores.filter((s) => s.adapter !== 'MANUAL')
     const offersByStore = await prisma.offer.groupBy({ by: ['storeId'], where: freshWhere(), _count: true })
     const storeCounts = new Map(offersByStore.map((r) => [r.storeId, r._count]))
     const rejects = ((lastRun?.rejects ?? []) as { store: string; item: string; title: string; price: number; reason: string }[])
-      // um por motivo, para o painel mostrar a variedade do filtro
+      // um por motivo, para mostrar a variedade do filtro
       .filter((r, i, all) => all.findIndex((x) => x.reason.replace(/"[^"]*"|\([^)]*\)/g, '') === r.reason.replace(/"[^"]*"|\([^)]*\)/g, '')) === i)
       .slice(0, 5)
 
@@ -256,18 +421,30 @@ export async function siteRoutes(app: FastifyInstance) {
       ...base,
       useMoments: true,
       page: {
-        title: `${base.site.title}: promoções de Black Friday conferidas em ${autoStores.length} lojas`,
+        title: `${base.site.title}: menores preços conferidos em ${autoStores.length} lojas`,
         description: `O ${base.site.title} confere de hora em hora o preço dos itens que acompanha em ${autoStores.length} lojas confiáveis e mostra só o desconto real, contra o histórico.`,
         path: '/',
       },
-      items: itemsVM,
-      itemsWithOffers: withOffers,
-      deals: topDeals,
+      shop: {
+        state,
+        cards: shown,
+        total: cards.length,
+        filtered,
+        orders: (Object.keys(ORDERS) as Order[]).map((id) => ({ id, label: ORDERS[id], selected: id === state.ordem })),
+        chips: [
+          { label: 'Todos', href: shopHref(state, { cat: '', promo: false }), active: !state.cat && !state.promo, count: cards.length },
+          { label: 'Promoções de verdade', href: shopHref(state, { promo: !state.promo }), active: state.promo, count: cards.filter((c) => c.isDeal).length },
+          ...categories.map((c) => ({
+            label: c,
+            href: shopHref(state, { cat: state.cat === c ? '' : c }),
+            active: state.cat === c,
+            count: cards.filter((x) => x.category === c).length,
+          })),
+        ],
+        clearHref: shopHref(state, { q: '', cat: '', promo: false }),
+      },
       story: story
-        ? {
-            ...story,
-            byStore: story.byStore.slice(0, 5).map((b) => ({ ...b, storeName: stores.find((s) => s.id === b.storeId)?.name ?? b.storeId })),
-          }
+        ? { ...story, byStore: [...story.byStore].sort((a, b) => a.price - b.price).slice(0, 5) }
         : null,
       inflatedExample,
       rejects,
@@ -288,50 +465,142 @@ export async function siteRoutes(app: FastifyInstance) {
         items: items.length,
         offers: offerCount,
         deals: dealTotal,
-        dealItems,
         stores: stores.length,
         autoStores: autoStores.length,
       },
     })
   })
 
-  app.get<{ Params: { slug: string } }>('/ofertas/:slug', async (request, reply) => {
+  app.get<{ Params: { slug: string }; Querystring: { dias?: string } }>('/ofertas/:slug', async (request, reply) => {
     if (!(await gate(request, reply))) return reply
     const item = await prisma.watchItem.findUnique({ where: { slug: request.params.slug } })
     if (!item || !item.active) {
       return render(reply.code(404), 'not-found.njk', { ...(await baseContext()), page: { title: 'Página não encontrada', path: request.url } })
     }
     const base = await baseContext()
+    const now = new Date()
+    const days = [7, 30, 90].includes(Number(request.query.dias)) ? Number(request.query.dias) : 30
+    const since = new Date(now.getTime() - days * DAY)
 
-    const [offers, snaps] = await Promise.all([
+    const [offers, stores, snaps, lastRun, others] = await Promise.all([
       prisma.offer.findMany({
-        where: { ...freshWhere(), watchItemId: item.id },
-        include: { store: true, watchItem: true },
-        orderBy: [{ price: 'asc' }],
-        take: 60,
+        where: { watchItemId: item.id, hidden: false, store: { enabled: true } },
+        include: { store: true, watchItem: true, history: { orderBy: { at: 'asc' } } },
       }),
+      prisma.store.findMany({ where: { enabled: true }, orderBy: { sortOrder: 'asc' } }),
       prisma.itemSnapshot.findMany({
-        where: { watchItemId: item.id, at: { gte: new Date(Date.now() - 30 * 86_400_000) }, minPrice: { not: null } },
+        where: { watchItemId: item.id, at: { gte: new Date(now.getTime() - 90 * DAY) }, minPrice: { not: null } },
         orderBy: { at: 'asc' },
       }),
+      prisma.collectorRun.findFirst({ where: { status: { not: 'RUNNING' } }, orderBy: { startedAt: 'desc' } }),
+      prisma.watchItem.findMany({ where: { active: true, id: { not: item.id } }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] }),
     ])
-    const cards = offers.map(cardVM)
-    const chart = priceChart(snaps.map((s) => ({ at: s.at, price: numReq(s.minPrice!) })))
+
+    const current = offers.filter((o) => isCurrent(o, now))
+    const avail = current.filter((o) => o.available).sort(byPrice)
+    const cards = avail.map(cardVM)
+    const best = cards[0] ?? null
+    const storeName = new Map(stores.map((s) => [s.id, s.name]))
+
+    // ── Histórico: o menor preço entre as lojas, uma foto por coleta ──
+    const allPoints: Point[] = snaps.map((s) => ({ at: s.at, price: numReq(s.minPrice!), storeId: s.minStoreId }))
+    // "Preço típico" com poucas horas de dado seria só o preço de agora com outro nome: só a partir de 1 dia.
+    const tracked = allPoints.length ? now.getTime() - allPoints[0]!.at.getTime() : 0
+    const typical = tracked >= DAY
+      ? typicalPrice(
+          allPoints.filter((p) => p.at.getTime() >= now.getTime() - 30 * DAY).map((p) => ({ at: p.at, price: p.price, available: true })),
+          now
+        )
+      : null
+    // O valor que valia no começo da janela entra como primeiro ponto, para a linha começar na borda.
+    const before = [...allPoints].reverse().find((p) => p.at < since)
+    const inWindow = allPoints.filter((p) => p.at >= since)
+    const seq = [...(before ? [{ ...before, at: since }] : []), ...inWindow]
+    // Só os pontos em que o preço mudou: a linha em degrau e a tabela ficam iguais, e mais leves.
+    const changes = seq.filter((p, i) => i === 0 || p.price !== seq[i - 1]!.price || p.storeId !== seq[i - 1]!.storeId)
+    const chart = historyChart(changes, now, typical, days)
+    const prices = seq.map((p) => p.price)
+    const lowest = seq.length ? seq[prices.indexOf(Math.min(...prices))]! : null
+    const highest = seq.length ? Math.max(...prices) : null
+
+    // ── Todas as lojas pesquisadas, com a situação de cada uma ──
+    const runErrors = ((lastRun?.errors ?? []) as { store?: string; item?: string; message?: string }[])
+      .filter((e) => e.item === item.name && e.store)
+    const rows = stores.flatMap((store) => {
+      const auto = store.adapter !== 'MANUAL'
+      if (auto && item.storeIds.length && !item.storeIds.includes(store.id)) return []
+      const mine = offers.filter((o) => o.storeId === store.id)
+      const cur = current.filter((o) => o.storeId === store.id)
+      const ok = cur.filter((o) => o.available).sort(byPrice)
+      const soldOut = cur.filter((o) => !o.available).sort(byPrice)
+      const status = ok.length ? 'ok' : soldOut.length ? 'esgotado' : !auto ? 'manual' : runErrors.some((e) => e.store === store.name) ? 'erro' : 'nada'
+      const spark = mine.length ? sparkline(storeSeries(mine, since, now), since, now) : null
+      const lows = mine.filter((o) => o.lowestPriceAt >= since)
+      return [{
+        id: store.id,
+        name: store.name,
+        trustNote: store.trustNote,
+        status,
+        best: ok[0] ? cardVM(ok[0]) : null,
+        lastPrice: soldOut[0] ? numReq(soldOut[0].price) : null,
+        offers: [...ok, ...soldOut].map(cardVM),
+        isBest: Boolean(best && ok[0] && ok[0].id === best.id),
+        diff: best && ok[0] ? numReq(ok[0].price) - best.price : null,
+        low: lows.length ? Math.min(...lows.map((o) => numReq(o.lowestPrice))) : null,
+        spark,
+      }]
+    })
+    const rank = { ok: 0, esgotado: 1, nada: 2, erro: 3, manual: 4 } as Record<string, number>
+    rows.sort((a, b) => rank[a.status]! - rank[b.status]! || (a.best?.price ?? 0) - (b.best?.price ?? 0))
+    const withOffer = rows.filter((r) => r.status === 'ok')
+    const without = rows.filter((r) => r.status !== 'ok')
+
+    // Fotos: uma por imagem diferente, dos anúncios disponíveis do mais barato ao mais caro.
+    const images = [...new Set([...avail, ...current].map((o) => o.imageUrl).filter((u): u is string => Boolean(u)))].slice(0, 6)
+
+    // Outros itens: os da mesma categoria primeiro.
+    const relatedItems = [...others].sort((a, b) => Number(b.category === item.category) - Number(a.category === item.category)).slice(0, 5)
+    const related = sortCards(await loadProductCards(relatedItems), 'relevancia')
+
+    const typicalOff = best && typical && best.price < typical ? 1 - best.price / typical : null
 
     return render(reply, 'item.njk', {
       ...base,
       page: {
-        title: `${item.name}: menor preço agora em lojas confiáveis — ${base.site.title}`,
-        description: cards[0]
-          ? `${item.name} a partir de ${cards[0].price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} na ${cards[0].storeName}. Preço conferido de hora em hora e comparado com o histórico.`
+        title: `${item.name}: menor preço agora e histórico — ${base.site.title}`,
+        description: best
+          ? `${item.name} a partir de ${best.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} na ${best.storeName}. Preço conferido de hora em hora em ${rows.filter((r) => r.status !== 'manual').length} lojas, com histórico.`
           : `Acompanhamos o preço de ${item.name} de hora em hora em lojas confiáveis.`,
         path: `/ofertas/${item.slug}`,
       },
-      item: { name: item.name, slug: item.slug, targetPrice: num(item.targetPrice), lastRunAt: item.lastRunAt },
-      best: cards[0] ?? null,
-      offers: cards,
-      storeCount: new Set(cards.map((c) => c.storeId)).size,
-      chart,
+      item: { name: item.name, slug: item.slug, category: item.category, targetPrice: num(item.targetPrice), lastRunAt: item.lastRunAt },
+      best,
+      images,
+      off: best ? Math.max(best.realOff ?? 0, best.listOff ?? 0) || null : null,
+      typicalOff,
+      offerCount: cards.length,
+      stores: {
+        rows,
+        withOffer,
+        without,
+        searched: rows.filter((r) => r.status !== 'manual').length,
+      },
+      history: {
+        days,
+        ranges: [7, 30, 90].map((d) => ({ days: d, href: `/ofertas/${item.slug}${d === 30 ? '' : `?dias=${d}`}#historico`, active: d === days })),
+        chart,
+        chartData: chart ? JSON.stringify(chart.data.map((d) => ({ ...d, s: d.s ? storeName.get(d.s) ?? null : null }))) : null,
+        typical,
+        lowest: lowest ? { price: lowest.price, at: lowest.at, store: lowest.storeId ? storeName.get(lowest.storeId) ?? null : null } : null,
+        highest,
+        since: allPoints[0]?.at ?? null,
+        // Tabela: as mudanças, da mais nova para a mais antiga.
+        table: changes
+          .map((p) => ({ at: p.at, price: p.price, store: p.storeId ? storeName.get(p.storeId) ?? '' : '' }))
+          .reverse()
+          .slice(0, 60),
+      },
+      related,
     })
   })
 }

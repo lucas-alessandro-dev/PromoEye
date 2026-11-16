@@ -1,0 +1,5 @@
+# Scripts rodam no Linux (container e VPS): CRLF do Windows quebra o `sh`.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.caddy text eol=lf
+Caddyfile text eol=lf
