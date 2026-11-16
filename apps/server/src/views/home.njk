@@ -11,11 +11,11 @@
     <header class="shop-head">
       <div class="shop-head__text">
         <h1>Menores preços de hoje</h1>
-        <p>{{ shop.total }} {{ 'item conferido' if shop.total == 1 else 'itens conferidos' }} de hora em hora em {{ counts.autoStores }} lojas confiáveis{% if lastRunAt %} · última coleta às {{ lastRunAt | hourBR }}{% endif %} · Black Friday {% if bf.days == 0 %}é hoje{% elif bf.days == 1 %}é amanhã{% else %}em {{ bf.days }} dias{% endif %}</p>
+        <p>{{ shop.total }} {{ 'item' if shop.total == 1 else 'itens' }} em {{ counts.autoStores }} lojas confiáveis, conferidos de hora em hora{% if lastRunAt %} · atualizado às {{ lastRunAt | hourBR }}{% endif %} · Black Friday {% if bf.days == 0 %}é hoje{% elif bf.days == 1 %}é amanhã{% else %}em {{ bf.days }} dias{% endif %}</p>
       </div>
       <form class="shop-search" role="search" method="get" action="/#ofertas">
         <label class="sr-only" for="busca">Buscar entre os itens</label>
-        <input id="busca" type="search" name="q" value="{{ shop.state.q }}" placeholder="Buscar geladeira, air fryer, TV…" autocomplete="off" enterkeyhint="search" maxlength="80">
+        <input id="busca" type="search" name="q" value="{{ shop.state.q }}" placeholder="O que você procura?" autocomplete="off" enterkeyhint="search" maxlength="80">
         {% if shop.state.cat %}<input type="hidden" name="cat" value="{{ shop.state.cat }}">{% endif %}
         {% if shop.state.promo %}<input type="hidden" name="promo" value="1">{% endif %}
         {% if shop.state.ordem != 'relevancia' %}<input type="hidden" name="ordem" value="{{ shop.state.ordem }}">{% endif %}
@@ -25,10 +25,11 @@
 
     <section class="shop-list" id="ofertas" aria-labelledby="ofertas-h">
       <h2 id="ofertas-h" class="sr-only">Itens acompanhados</h2>
-      <div class="shop-bar">
-        <nav class="shop-chips" aria-label="Filtrar os itens">
-          {% for c in shop.chips %}<a class="fchip{% if c.active %} is-on{% endif %}" href="{{ c.href }}"{% if c.active %} aria-current="true"{% endif %}>{{ c.label }}<span class="fchip__n">{{ c.count }}</span></a>{% endfor %}
-        </nav>
+      <nav class="shop-chips" aria-label="Filtrar os itens">
+        {% for c in shop.chips %}<a class="fchip{% if c.active %} is-on{% endif %}" href="{{ c.href }}"{% if c.active %} aria-current="true"{% endif %}>{{ c.label }}<span class="fchip__n">{{ c.count }}</span></a>{% endfor %}
+      </nav>
+      <div class="shop-meta">
+        <p class="shop-count" role="status">{{ shop.cards.length }} {{ 'item' if shop.cards.length == 1 else 'itens' }}{% if shop.state.q %} para “{{ shop.state.q }}”{% endif %}{% if shop.filtered %} · <a class="link" href="{{ shop.clearHref }}">Limpar filtros</a>{% endif %}</p>
         <form class="shop-sort" method="get" action="/#ofertas">
           {% if shop.state.q %}<input type="hidden" name="q" value="{{ shop.state.q }}">{% endif %}
           {% if shop.state.cat %}<input type="hidden" name="cat" value="{{ shop.state.cat }}">{% endif %}
@@ -40,7 +41,6 @@
           <button type="submit" class="shop-sort__apply" data-apply>Aplicar</button>
         </form>
       </div>
-      <p class="shop-count" role="status">{{ shop.cards.length }} {{ 'item' if shop.cards.length == 1 else 'itens' }}{% if shop.state.q %} para “{{ shop.state.q }}”{% endif %}{% if shop.filtered %} · <a class="link" href="{{ shop.clearHref }}">Limpar filtros</a>{% endif %}</p>
 
       {% if shop.cards.length %}
       <ul class="pgrid">{% for c in shop.cards %}{{ productCard(c) }}{% endfor %}</ul>

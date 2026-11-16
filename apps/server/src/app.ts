@@ -14,7 +14,7 @@ import { storeRoutes } from './routes/api/stores.js'
 import { messageRoutes } from './routes/api/messages.js'
 import { goRoutes } from './routes/go.js'
 import { adminAppRoutes } from './routes/admin-app.js'
-import { siteRoutes } from './routes/site.js'
+import { renderNotFound, siteRoutes } from './routes/site.js'
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -78,6 +78,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(goRoutes)
   await app.register(adminAppRoutes)
   await app.register(siteRoutes)
+
+  // Endereço desconhecido: a API responde JSON; quem navega vê a página 404 da vitrine
+  // (antes recebia o JSON cru do Fastify).
+  app.setNotFoundHandler(async (request, reply) => {
+    const wantsPage = request.method === 'GET' && !request.url.startsWith('/api/') && (request.headers.accept ?? '').includes('text/html')
+    if (!wantsPage) return reply.code(404).send({ error: 'Não encontrado.' })
+    return renderNotFound(request, reply)
+  })
 
   return app
 }

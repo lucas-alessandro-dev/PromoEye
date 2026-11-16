@@ -21,6 +21,29 @@ if (mainImg && thumbs) {
   })
 }
 
+// Celular: barra de compra presa embaixo enquanto a caixa de compra está fora
+// da tela. Some quando a caixa aparece e quando o rodapé chega (não cobre nada lá).
+const buybar = document.querySelector('[data-buybar]')
+const buyActions = document.querySelector('.buy__actions')
+if (buybar && buyActions && 'IntersectionObserver' in window) {
+  const phone = matchMedia('(max-width: 767px)')
+  const footer = document.querySelector('footer')
+  const visible = new Map()
+  const update = () => {
+    const show = phone.matches && !visible.get(buyActions) && !visible.get(footer)
+    buybar.classList.toggle('is-on', show)
+    buybar.toggleAttribute('inert', !show)
+  }
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) visible.set(e.target, e.isIntersecting)
+    update()
+  })
+  io.observe(buyActions)
+  if (footer) io.observe(footer)
+  phone.addEventListener('change', update)
+  buybar.hidden = false
+}
+
 // Histórico: cursor que acha a data. O preço é em degrau, então o valor num
 // instante é o da última mudança antes dele.
 const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -51,20 +74,38 @@ for (const plot of document.querySelectorAll('[data-points]')) {
     cursor.hidden = false
     cursor.style.setProperty('--x', `${x}%`)
     cursor.style.setProperty('--y', `${p.y}%`)
-    cursor.classList.toggle('is-flip', x > 62)
     value.textContent = money.format(p.v)
     detail.textContent = `${p.s ? `${p.s} · ` : ''}desde ${when.format(new Date(p.t))}`
+    // O balão fica à direita do cursor; se não couber, à esquerda; e nunca sai da
+    // tela (no celular estreito, perto do meio, ele não cabe inteiro em nenhum lado).
+    const rect = plot.getBoundingClientRect()
+    const tipWidth = cursor.querySelector('.hc__tip').offsetWidth
+    const screen = document.documentElement.clientWidth
+    const xPx = rect.left + (rect.width * x) / 100
+    let left = xPx + 12
+    if (left + tipWidth > screen - 8) left = xPx - 12 - tipWidth
+    left = Math.max(8, Math.min(left, screen - 8 - tipWidth))
+    cursor.style.setProperty('--tip-dx', `${Math.round(left - xPx)}px`)
   }
   const hide = () => {
     cursor.hidden = true
   }
 
-  plot.addEventListener('pointermove', (event) => {
+  const follow = (event) => {
     const rect = plot.getBoundingClientRect()
     const x = Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100))
     show(stepAt(x), x)
+  }
+  // Mouse: segue o ponteiro e some ao sair. Toque: o valor aparece no toque
+  // (e ao arrastar de lado) e fica na tela até tocar fora do gráfico.
+  plot.addEventListener('pointermove', follow)
+  plot.addEventListener('pointerdown', follow)
+  plot.addEventListener('pointerleave', (event) => {
+    if (event.pointerType === 'mouse') hide()
   })
-  plot.addEventListener('pointerleave', hide)
+  document.addEventListener('pointerdown', (event) => {
+    if (!plot.contains(event.target)) hide()
+  })
   plot.addEventListener('focus', () => show(index))
   plot.addEventListener('blur', hide)
   plot.addEventListener('keydown', (event) => {

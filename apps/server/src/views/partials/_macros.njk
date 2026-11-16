@@ -22,7 +22,7 @@
       <span class="pc__row">{{ bigPrice(c.best.price, 'pc__price') }}{% if c.best.listOff %}<span class="pc__off">{{ c.best.listOff | pct }} OFF</span>{% endif %}</span>
       {% if c.best.installments %}<span class="pc__inst">{{ c.best.installments }}</span>{% endif %}
       <span class="pc__store">Menor preço · <b>{{ c.best.storeName }}</b></span>
-      <span class="pc__cmp"><span class="pc__cmp-dot" aria-hidden="true"></span>Comparado em {{ c.storeCount }} {{ 'loja' if c.storeCount == 1 else 'lojas' }}</span>
+      <span class="pc__cmp"><span class="pc__cmp-dot" aria-hidden="true"></span>{{ c.storeCount }} {{ 'loja comparada' if c.storeCount == 1 else 'lojas comparadas' }}</span>
       {% if c.flags.length %}<span class="pc__flags">{% for f in c.flags %}{{ chip(f) }}{% endfor %}</span>{% endif %}
       {% else %}
       <span class="pc__none">{% if c.soldOutStores %}Esgotado nas lojas pesquisadas{% else %}Sem oferta nas lojas agora{% endif %}</span>

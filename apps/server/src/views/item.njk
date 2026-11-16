@@ -14,10 +14,11 @@
 <div class="shop shop--pdp">
   <div class="wrap">
     <nav class="crumbs" aria-label="Você está em">
+      {# No celular só o link de volta aparece (o caminho inteiro quebraria em duas linhas). #}
       <ol>
-        <li><a href="/#ofertas">Início</a></li>
-        {% if item.category %}<li><a href="/?cat={{ item.category | urlencode }}#ofertas">{{ item.category }}</a></li>{% endif %}
-        <li><span aria-current="page">{{ item.name }}</span></li>
+        <li{% if not item.category %} class="crumbs__back"{% endif %}><a href="/#ofertas">Início</a></li>
+        {% if item.category %}<li class="crumbs__back"><a href="/?cat={{ item.category | urlencode }}#ofertas">{{ item.category }}</a></li>{% endif %}
+        <li class="crumbs__here"><span aria-current="page">{{ item.name }}</span></li>
       </ol>
     </nav>
 
@@ -37,7 +38,7 @@
       <div class="pdp__info">
         <p class="pdp__kicker">Conferido em {{ stores.searched }} lojas{% if item.lastRunAt %} às {{ item.lastRunAt | hourBR }}{% endif %}</p>
         <h1 id="pdp-h" class="pdp__title">{{ item.name }}</h1>
-        {% if best and best.flags.length %}<p class="pdp__flags">{% for f in best.flags %}{{ chip(f) }}{% endfor %}</p>{% endif %}
+        {% if bestFlags.length %}<p class="pdp__flags">{% for f in bestFlags %}{{ chip(f) }}{% endfor %}</p>{% endif %}
 
         <div class="buy">
           {% if best %}
@@ -57,11 +58,14 @@
           <div class="buy__actions"><a class="btn btn--secondary" href="#lojas">Ver a situação em cada loja</a></div>
           {% endif %}
 
+          {% if history.since %}
+          <p class="buy__stats-cap">Nos últimos {{ history.days }} dias</p>
           <dl class="buy__stats">
-            <div><dt>Menor em {{ history.days }} dias</dt><dd>{{ history.lowest.price | brl if history.lowest else '—' }}</dd></div>
-            <div><dt>Preço típico</dt><dd>{% if history.typical %}{{ history.typical | brl }}{% elif history.since %}<span class="buy__soon" title="O preço típico sai com pelo menos 1 dia de acompanhamento">Em formação</span>{% else %}—{% endif %}</dd></div>
-            <div><dt>Maior em {{ history.days }} dias</dt><dd>{{ history.highest | brl if history.highest else '—' }}</dd></div>
+            <div><dt>Menor</dt><dd>{{ history.lowest.price | brl if history.lowest else '—' }}</dd></div>
+            <div><dt>Típico</dt><dd>{% if history.typical %}{{ history.typical | brl }}{% elif history.since %}<span class="buy__soon" title="O preço típico sai com pelo menos 1 dia de acompanhamento">Em formação</span>{% else %}—{% endif %}</dd></div>
+            <div><dt>Maior</dt><dd>{{ history.highest | brl if history.highest else '—' }}</dd></div>
           </dl>
+          {% endif %}
           <p class="buy__note">Preço à vista{% if item.lastRunAt %}, conferido às {{ item.lastRunAt | hourBR }}{% endif %}. Pode mudar na loja até a próxima coleta. Alguns links são de afiliado; o preço para você é o mesmo.</p>
         </div>
       </div>
@@ -71,7 +75,9 @@
     <section class="pdp-sec" id="lojas" aria-labelledby="lojas-h">
       <div class="pdp-sec__head">
         <h2 id="lojas-h">Preço em cada loja pesquisada</h2>
-        <p>{{ stores.searched }} lojas pesquisadas{% if lastRunAt %} na coleta das {{ lastRunAt | hourBR }}{% endif %}: {{ stores.withOffer.length }} {{ 'tem' if stores.withOffer.length == 1 else 'têm' }} este item agora. A linha mostra o preço da loja nos últimos {{ history.days }} dias.</p>
+        <p>{{ stores.searched }} lojas pesquisadas{% if lastRunAt %} na coleta das {{ lastRunAt | hourBR }}{% endif %}:
+          {%- if stores.withOffer.length == 0 %} nenhuma tem este item à venda agora.
+          {%- else %} {{ stores.withOffer.length }} {{ 'tem' if stores.withOffer.length == 1 else 'têm' }} este item agora. A linha mostra o preço da loja nos últimos {{ history.days }} dias.{% endif %}</p>
       </div>
 
       {% if stores.withOffer.length %}
@@ -92,7 +98,7 @@
           <div class="st__price">
             {% if r.best.showList %}<s><span class="sr-only">Preço anunciado antes: </span>{{ r.best.listPrice | brl }}</s>{% endif %}
             <b>{{ r.best.price | brl }}</b>
-            {% if r.diff and r.diff > 0 %}<small>{{ r.diff | brl }} a mais que o menor</small>{% elif r.best.installments %}<small>{{ r.best.installments }}</small>{% endif %}
+            {% if r.diff and r.diff > 0 %}<small>{{ r.diff | brl }} a mais</small>{% elif r.best.installments %}<small>{{ r.best.installments }}</small>{% endif %}
           </div>
           <a class="st__go" href="{{ r.best.href }}" rel="sponsored nofollow noopener" aria-label="Ir para a loja {{ r.name }}, {{ r.best.price | brl }}">Ir para a loja</a>
           {% if r.offers.length > 1 %}
@@ -116,9 +122,9 @@
           <span class="so__name">{{ r.name }}</span>
           <span class="so__why">
             {%- if r.status == 'esgotado' %}Esgotado{% if r.lastPrice %} · estava {{ r.lastPrice | brl }}{% endif %}
-            {%- elif r.status == 'nada' %}Não achamos este item na busca da loja
-            {%- elif r.status == 'erro' %}A loja não respondeu na última coleta
-            {%- else %}Sem busca automática: bloqueia robôs, ofertas entram à mão{% endif -%}
+            {%- elif r.status == 'nada' %}Não encontrado na loja
+            {%- elif r.status == 'erro' %}Não respondeu na última coleta
+            {%- else %}Só manual (bloqueia robôs){% endif -%}
           </span>
         </li>
         {% endfor %}
@@ -150,7 +156,6 @@
             {% if ch.typical %}<path class="hc__typ" d="M0,{{ ch.typical.pct * 10 }} H1000"/>{% endif %}
             <path class="hc__line" d="{{ ch.d }}"/>
           </svg>
-          {% if ch.typical %}<span class="hc__typlabel" style="top: {{ ch.typical.pct }}%">Preço típico · {{ ch.typical.value | brlShort }}</span>{% endif %}
           {% if ch.min.price < ch.last.price %}
           <span class="hc__dot" style="left: {{ ch.min.pct.x }}%; top: {{ ch.min.pct.y }}%" aria-hidden="true"></span>
           <span class="hc__mark{% if ch.min.pct.x < 18 %} is-left{% elif ch.min.pct.x > 82 %} is-right{% endif %}" style="left: {{ ch.min.pct.x }}%; top: {{ ch.min.pct.y }}%" aria-hidden="true">Menor · {{ ch.min.price | brlShort }}</span>
@@ -160,6 +165,11 @@
         </div>
         <div class="hc__x" aria-hidden="true">{% for t in ch.xTicks %}<span style="left: {{ t.pct }}%">{{ t.label }}</span>{% endfor %}</div>
       </div>
+      <p class="hc-legend" aria-hidden="true">
+        <span><i class="hc-legend__line"></i>Menor preço entre as lojas</span>
+        {% if ch.typical %}<span><i class="hc-legend__typ"></i>Preço típico {{ ch.typical.value | brl }}</span>{% endif %}
+        <span><i class="hc-legend__now"></i>Agora {{ ch.last.price | brl }}</span>
+      </p>
       {% else %}
       <div class="hc-empty">
         <p><b>O gráfico se forma a partir da segunda coleta.</b></p>
@@ -191,6 +201,14 @@
     {% endif %}
   </div>
 </div>
+
+{# Celular: quando a caixa de compra sai da tela, o preço e o botão ficam presos embaixo (shop.js). #}
+{% if best %}
+<div class="buybar" data-buybar hidden>
+  <div class="buybar__info"><b>{{ best.price | brl }}</b><span>{{ best.storeName }}</span></div>
+  <a class="btn btn--primary buybar__cta" href="{{ best.href }}" rel="sponsored nofollow noopener">Ir para a loja</a>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block closeTitle %}Outros itens com preço conferido{% endblock %}

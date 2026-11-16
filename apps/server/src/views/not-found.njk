@@ -1,14 +1,24 @@
 {% extends "layout.njk" %}
+{% from "partials/_macros.njk" import productCard %}
+
+{# 404 da vitrine: endereço desconhecido (kind = page) ou item pausado/removido (kind = item).
+   Mostra itens de verdade logo abaixo, para a pessoa não ficar num beco sem saída. #}
 {% block main %}
-<div class="item-page">
-<section class="section" aria-labelledby="nf-h">
+<div class="shop">
   <div class="wrap">
-    <div class="item-head">
-      <h1 id="nf-h">Este item não está mais na lista</h1>
-      <p class="t-lead">Ele pode ter sido pausado ou removido. Os itens acompanhados agora estão na página inicial.</p>
-      <p><a class="btn btn--primary" href="/#ofertas">Ver as promoções</a></p>
-    </div>
+    <section class="nf" aria-labelledby="nf-h">
+      <p class="nf__code" aria-hidden="true">404</p>
+      <h1 id="nf-h">{% if kind == 'item' %}Este item não está mais na lista{% else %}Página não encontrada{% endif %}</h1>
+      <p>{% if kind == 'item' %}Ele pode ter sido pausado ou removido.{% else %}O endereço pode ter mudado ou estar incompleto.{% endif %} Os itens acompanhados agora estão na página inicial.</p>
+      <a class="btn btn--primary" href="/#ofertas">Ver os menores preços<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+    </section>
+
+    {% if suggestions and suggestions.length %}
+    <section class="pdp-sec" aria-labelledby="nf-sug">
+      <div class="pdp-sec__head"><h2 id="nf-sug">Itens acompanhados</h2></div>
+      <ul class="pgrid">{% for c in suggestions %}{{ productCard(c) }}{% endfor %}</ul>
+    </section>
+    {% endif %}
   </div>
-</section>
 </div>
 {% endblock %}

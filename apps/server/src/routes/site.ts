@@ -177,7 +177,8 @@ function productCards(items: WatchItem[], offers: OfferFull[]): ProductCardVM[] 
       storeNames: storeIds.map((id) => avail.find((o) => o.storeId === id)!.store.name),
       soldOutStores: soldOut.size,
       isDeal: avail.some((o) => o.isDeal),
-      flags: best?.flags.slice(0, 2) ?? [],
+      // "Mais barato entre as lojas" é verdade em todo cartão (ele mostra o mais barato): seria ruído.
+      flags: best?.flags.filter((f) => f.id !== 'mais-barato').slice(0, 2) ?? [],
       inflated: inflated ? cardVM(inflated) : null,
       byStore: storeIds.map((id) => {
         const o = avail.find((x) => x.storeId === id)!
@@ -267,14 +268,17 @@ function niceTicks(lo: number, hi: number, count = 4): number[] {
  * ficar do mesmo tamanho no celular e no computador.
  */
 function historyChart(points: Point[], now: Date, typical: number | null, days: number) {
-  if (points.length < 2) return null
+  // Um ponto só é um preço que não mudou desde então (quem garante as 2 coletas é quem chama).
+  if (!points.length) return null
   const x0 = points[0]!.at.getTime()
   const x1 = now.getTime()
   if (x1 - x0 < 30 * 60_000) return null
   const prices = points.map((p) => p.price)
   const lo = Math.min(...prices, typical ?? Infinity)
   const hi = Math.max(...prices, typical ?? -Infinity)
-  const ticks = niceTicks(lo, hi)
+  // Folga em volta: preço estável fica no meio do gráfico (colado no chão pareceria uma queda).
+  const pad = Math.max((hi - lo) * 0.1, hi * 0.02)
+  const ticks = niceTicks(lo - pad, hi + pad)
   const y0 = ticks[0]!
   const y1 = ticks[ticks.length - 1]!
   const X = (t: number) => ((t - x0) / Math.max(1, x1 - x0)) * 1000
@@ -352,7 +356,22 @@ function sparkline(points: Point[], since: Date, now: Date) {
 
 // ── Rotas ──────────────────────────────────────────────────────────────────────────────────────
 
+/** Página 404 da vitrine, com alguns itens de verdade para a pessoa seguir navegando. */
+export async function renderNotFound(request: FastifyRequest, reply: FastifyReply, kind: 'page' | 'item' = 'page') {
+  const items = await prisma.watchItem.findMany({ where: { active: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] })
+  const suggestions = sortCards(await loadProductCards(items), 'relevancia').filter((c) => c.best).slice(0, 5)
+  return render(reply.code(404), 'not-found.njk', {
+    ...(await baseContext()),
+    kind,
+    suggestions,
+    page: { title: kind === 'item' ? 'Item não encontrado' : 'Página não encontrada', path: request.url },
+  })
+}
+
 export async function siteRoutes(app: FastifyInstance) {
+  // Navegadores pedem /favicon.ico por conta própria (ex.: na página 404); o ícone de verdade é o SVG.
+  app.get('/favicon.ico', async (_req, reply) => reply.redirect('/static/favicon.svg', 301))
+
   app.get('/robots.txt', async (_req, reply) => {
     const settings = await getSettings()
     const body = settings.allowIndexing && settings.publicSite
@@ -474,9 +493,7 @@ export async function siteRoutes(app: FastifyInstance) {
   app.get<{ Params: { slug: string }; Querystring: { dias?: string } }>('/ofertas/:slug', async (request, reply) => {
     if (!(await gate(request, reply))) return reply
     const item = await prisma.watchItem.findUnique({ where: { slug: request.params.slug } })
-    if (!item || !item.active) {
-      return render(reply.code(404), 'not-found.njk', { ...(await baseContext()), page: { title: 'Página não encontrada', path: request.url } })
-    }
+    if (!item || !item.active) return renderNotFound(request, reply, 'item')
     const base = await baseContext()
     const now = new Date()
     const days = [7, 30, 90].includes(Number(request.query.dias)) ? Number(request.query.dias) : 30
@@ -518,7 +535,8 @@ export async function siteRoutes(app: FastifyInstance) {
     const seq = [...(before ? [{ ...before, at: since }] : []), ...inWindow]
     // Só os pontos em que o preço mudou: a linha em degrau e a tabela ficam iguais, e mais leves.
     const changes = seq.filter((p, i) => i === 0 || p.price !== seq[i - 1]!.price || p.storeId !== seq[i - 1]!.storeId)
-    const chart = historyChart(changes, now, typical, days)
+    // Gráfico a partir da 2ª coleta, mesmo que o preço não tenha mudado (aí é uma linha reta, e isso é informação).
+    const chart = seq.length >= 2 ? historyChart(changes, now, typical, days) : null
     const prices = seq.map((p) => p.price)
     const lowest = seq.length ? seq[prices.indexOf(Math.min(...prices))]! : null
     const highest = seq.length ? Math.max(...prices) : null
@@ -575,6 +593,7 @@ export async function siteRoutes(app: FastifyInstance) {
       },
       item: { name: item.name, slug: item.slug, category: item.category, targetPrice: num(item.targetPrice), lastRunAt: item.lastRunAt },
       best,
+      bestFlags: best?.flags.filter((f) => f.id !== 'mais-barato') ?? [],
       images,
       off: best ? Math.max(best.realOff ?? 0, best.listOff ?? 0) || null : null,
       typicalOff,
