@@ -1,16 +1,11 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { manualOfferInput, offerUpdateInput } from '@promoeye/shared'
+import { manualOfferInput, offerProductInput, offerUpdateInput } from '@promoeye/shared'
 import { num, numReq, prisma, type Prisma } from '../../lib/prisma.js'
 import { parse } from '../../lib/validate.js'
 import { draftForBestDeal, FRESH_MS } from '../../collector/run.js'
-import { messageDTO, offerDTO } from '../../services/dto.js'
-
-const include = {
-  store: true,
-  watchItem: { select: { id: true, name: true } },
-  _count: { select: { clicks: true } },
-} as const
+import { linkOffersToProducts } from '../../collector/catalog.js'
+import { messageDTO, offerDTO, offerInclude as include } from '../../services/dto.js'
 
 const listQuery = z.object({
   itemId: z.string().optional(),
@@ -138,7 +133,35 @@ export async function offerRoutes(app: FastifyInstance) {
       update: { ...data, history: { create: { price: input.price, listPrice: input.listPrice, available: true } } },
       include,
     })
+    // Com EAN, a oferta manual (Mercado Livre, Magalu…) entra no catálogo ao lado das automáticas.
+    if (input.gtin) {
+      await linkOffersToProducts([
+        { offerId: offer.id, gtin: input.gtin, title: input.title, imageUrl: input.imageUrl, brand: null, modelRef: null, category: item.category },
+      ])
+      const linked = await prisma.offer.findUniqueOrThrow({ where: { id: offer.id }, include })
+      return reply.code(201).send(offerDTO(linked))
+    }
     return reply.code(201).send(offerDTO(offer))
+  })
+
+  /**
+   * Liga a oferta a um produto do catálogo pelo EAN (cria o produto se for o
+   * primeiro), ou desliga com { gtin: null }. Para anúncios sem EAN na busca
+   * (Amazon, KaBuM!, manuais). Se a loja mandar EAN na próxima coleta, o dela vence.
+   */
+  app.post<{ Params: { id: string } }>('/offers/:id/product', async (request, reply) => {
+    const input = parse(offerProductInput, request.body, reply)
+    if (!input) return reply
+    const offer = await prisma.offer.findUnique({ where: { id: request.params.id }, include: { watchItem: { select: { category: true } } } })
+    if (!offer) return reply.code(404).send({ error: 'Oferta não encontrada.' })
+    if (input.gtin) {
+      await linkOffersToProducts([
+        { offerId: offer.id, gtin: input.gtin, title: offer.title, imageUrl: offer.imageUrl, brand: offer.brand, modelRef: null, category: offer.watchItem.category },
+      ])
+    } else {
+      await prisma.offer.update({ where: { id: offer.id }, data: { productId: null, gtin: null } })
+    }
+    return offerDTO(await prisma.offer.findUniqueOrThrow({ where: { id: offer.id }, include }))
   })
 
   app.post<{ Params: { id: string } }>('/offers/:id/message', async (request, reply) => {

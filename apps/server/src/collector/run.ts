@@ -9,6 +9,8 @@ import { matchOffer, outlierCut, requiredTerms, sellerAllowed, type MatchRules, 
 import { containsTerm, normalize } from '../lib/text.js'
 import { median, scoreOffer, type PricePointLite } from './scoring.js'
 import type { RawOffer, StoreContext } from './types.js'
+import { linkOffersToProducts, type CatalogRow } from './catalog.js'
+import { FRESH_MS } from './fresh.js'
 
 /**
  * Uma coleta: para cada loja ativa, busca cada item acompanhado; filtra o que
@@ -21,8 +23,7 @@ import type { RawOffer, StoreContext } from './types.js'
  */
 
 const HOUR = 3_600_000
-/** Anúncio que não aparece há mais que isso sai da vitrine (mas fica no histórico). */
-export const FRESH_MS = 3 * HOUR
+export { FRESH_MS }
 
 type StoreResult = { ok: true; rows: RawOffer[] } | { ok: false; error: string }
 
@@ -33,6 +34,8 @@ interface Stats {
   offersNew: number
   priceChanges: number
   newDeals: number
+  /** Produtos novos no catálogo (EAN visto pela primeira vez). Só para o log. */
+  productsNew: number
 }
 
 export interface RejectSample {
@@ -107,7 +110,7 @@ function errMessage(err: unknown): string {
 
 async function execute(runId: string, opts: { itemIds?: string[]; log?: (m: string) => void }): Promise<void> {
   const log = opts.log ?? (() => undefined)
-  const stats: Stats = { itemsChecked: 0, requests: 0, offersSeen: 0, offersNew: 0, priceChanges: 0, newDeals: 0 }
+  const stats: Stats = { itemsChecked: 0, requests: 0, offersSeen: 0, offersNew: 0, priceChanges: 0, newDeals: 0, productsNew: 0 }
   const errors: { store?: string; item?: string; message: string }[] = []
   const rejects: RejectSample[] = []
 
@@ -190,16 +193,25 @@ async function execute(runId: string, opts: { itemIds?: string[]; log?: (m: stri
     const status = errors.length === 0 ? 'OK' : stats.offersSeen > 0 || stats.requests > errors.length ? 'PARTIAL' : 'FAILED'
     await prisma.collectorRun.update({
       where: { id: runId },
-      data: { ...stats, status, finishedAt: new Date(), errors: errors.slice(0, 200), rejects: rejects as object[] },
+      data: { ...runColumns(stats), status, finishedAt: new Date(), errors: errors.slice(0, 200), rejects: rejects as object[] },
     })
-    log(`coleta ${runId}: ${status} — ${stats.offersSeen} anúncios, ${stats.newDeals} promoções novas`)
+    log(
+      `coleta ${runId}: ${status} — ${stats.offersSeen} anúncios, ${stats.newDeals} promoções novas` +
+        (stats.productsNew ? `, ${stats.productsNew} produtos novos no catálogo` : '')
+    )
   } catch (err) {
     errors.push({ message: errMessage(err) })
     await prisma.collectorRun
-      .update({ where: { id: runId }, data: { ...stats, status: 'FAILED', finishedAt: new Date(), errors } })
+      .update({ where: { id: runId }, data: { ...runColumns(stats), status: 'FAILED', finishedAt: new Date(), errors } })
       .catch(() => undefined)
     log(`coleta ${runId}: FALHOU — ${errMessage(err)}`)
   }
+}
+
+/** Só as colunas que existem em CollectorRun. */
+function runColumns(s: Stats): Omit<Stats, 'productsNew'> {
+  const { productsNew: _ignored, ...cols } = s
+  return cols
 }
 
 export function sellerRulesFor(store: Pick<Store, 'sellerPolicy'>, settings: { trustedSellers: string[]; blockedSellers: string[] }): SellerRules {
@@ -263,6 +275,7 @@ async function processItem(
   // 2. Gravar anúncio e histórico.
   const previousPrice = new Map<string, number | null>()
   const seenOfferIds = new Set<string>()
+  const catalogRows: CatalogRow[] = []
   for (const { store, raw } of kept) {
     stats.offersSeen++
     const where = {
@@ -278,12 +291,20 @@ async function processItem(
       price: raw.price,
       listPrice: raw.listPrice,
       cardPrice: raw.cardPrice,
+      pixPrice: raw.pixPrice,
       installments: raw.installments,
       promoLabel: raw.promoLabel,
       available: raw.available,
       missingSince: null,
       lastSeenAt: now,
+      // Sem EAN nesta resposta, fica o que já estava (inclusive o ligado à mão no painel).
+      ...(raw.gtin ? { gtin: raw.gtin } : {}),
+      ...(raw.brand ? { brand: raw.brand } : {}),
     }
+    const catalogRow = (offerId: string): CatalogRow | null =>
+      raw.gtin
+        ? { offerId, gtin: raw.gtin, title: raw.title, imageUrl: raw.imageUrl, brand: raw.brand, modelRef: raw.modelRef, category: item.category }
+        : null
 
     if (!existing) {
       const created = await prisma.offer.create({
@@ -301,6 +322,8 @@ async function processItem(
       stats.offersNew++
       previousPrice.set(created.id, null)
       seenOfferIds.add(created.id)
+      const row = catalogRow(created.id)
+      if (row) catalogRows.push(row)
       continue
     }
 
@@ -327,6 +350,14 @@ async function processItem(
     if (changed) stats.priceChanges++
     previousPrice.set(existing.id, oldPrice)
     seenOfferIds.add(existing.id)
+    const row = catalogRow(existing.id)
+    if (row) catalogRows.push(row)
+  }
+
+  // 2b. Catálogo: liga cada anúncio com EAN ao produto (cria na primeira vez).
+  if (catalogRows.length) {
+    const res = await linkOffersToProducts(catalogRows)
+    stats.productsNew += res.created
   }
 
   // 3. Quem sumiu da busca de uma loja que respondeu.
@@ -469,8 +500,26 @@ export async function draftForBestDeal(
     realDiscountPct: offer.realDiscountPct,
   })
   const queue = !force && (await autoQueueEnabled())
-  await prisma.outboundMessage.create({
+  const created = await prisma.outboundMessage.create({
     data: { offerId: offer.id, price, reason, body, status: queue ? 'QUEUED' : 'DRAFT', queuedAt: queue ? new Date() : null },
   })
+  // No máximo UMA mensagem ativa por item: a nova (mais barata) substitui as
+  // que ainda esperavam. O botão "Gerar mensagem" (force) não mexe nas outras:
+  // quem pediu quer comparar antes de decidir.
+  if (!force) await supersedeOlderMessages(item.id, created.id, created.createdAt)
   return true
+}
+
+/** Rascunhos e mensagens na fila do mesmo item, mais velhos que `keepId`, viram DISCARDED com o motivo. */
+export async function supersedeOlderMessages(watchItemId: string, keepId: string, before: Date): Promise<number> {
+  const res = await prisma.outboundMessage.updateMany({
+    where: {
+      id: { not: keepId },
+      status: { in: ['DRAFT', 'QUEUED'] },
+      createdAt: { lte: before },
+      offer: { watchItemId },
+    },
+    data: { status: 'DISCARDED', error: 'Substituída por uma mensagem mais nova (e mais barata) do mesmo item.' },
+  })
+  return res.count
 }

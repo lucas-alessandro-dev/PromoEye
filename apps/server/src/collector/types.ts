@@ -10,6 +10,11 @@ export interface RawOffer {
   listPrice: number | null
   /** Preço no cartão, quando difere do à vista. */
   cardPrice: number | null
+  /**
+   * Preço no Pix, quando a loja informa um valor ou regra explícita. Pode ser
+   * menor que o `price`; nunca substitui o `price` (a base do histórico).
+   */
+  pixPrice: number | null
   installments: string | null
   sellerName: string | null
   /** true = vendido pela própria loja; null = a busca não informa. */
@@ -17,6 +22,11 @@ export interface RawOffer {
   available: boolean
   sponsored: boolean
   promoLabel: string | null
+  /** GTIN canônico de 14 dígitos (normalizeGtin), ou null se a loja não manda ou não é válido. */
+  gtin: string | null
+  brand: string | null
+  /** Referência do produto na loja/fabricante, quando vem. */
+  modelRef: string | null
 }
 
 export interface SearchOptions {

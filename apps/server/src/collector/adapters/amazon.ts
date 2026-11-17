@@ -43,6 +43,7 @@ export function parseAmazonSearch(html: string): RawOffer[] {
       price,
       listPrice: list && list > price ? list : null,
       cardPrice: null,
+      pixPrice: null,
       installments: null,
       sellerName: null,
       // A busca não diz quem vende; a Garantia de A a Z cobre todos.
@@ -50,6 +51,10 @@ export function parseAmazonSearch(html: string): RawOffer[] {
       available: true,
       sponsored,
       promoLabel: row.find('.a-badge-text').first().text().trim() || null,
+      // A página de busca não mostra EAN; com a Creators API isso muda.
+      gtin: null,
+      brand: null,
+      modelRef: null,
     })
   })
 

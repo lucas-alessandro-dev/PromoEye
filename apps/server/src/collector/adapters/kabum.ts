@@ -59,12 +59,18 @@ export function mapKabumProducts(products: KabumProduct[]): RawOffer[] {
       price: pix,
       listPrice: list,
       cardPrice: card && card > pix ? card : null,
+      // Na KaBuM! o preço que gravamos JÁ É o do Pix (price_with_discount).
+      pixPrice: ((offerLive ? a.offer?.price_with_discount : undefined) || a.price_with_discount) ? pix : null,
       installments: a.max_installment ? String(a.max_installment) : null,
       sellerName: a.is_marketplace ? (a.marketplace?.seller_name ?? null) : 'KaBuM!',
       soldByStore: !a.is_marketplace,
       available: Boolean(a.available),
       sponsored: false,
       promoLabel: offerLive ? (a.offer?.name ?? null) : null,
+      // A busca da KaBuM! não traz EAN.
+      gtin: null,
+      brand: null,
+      modelRef: null,
     })
   }
   return out
