@@ -6,7 +6,7 @@ import { parse } from '../../lib/validate.js'
 import { AlreadyRunningError, currentRun, FRESH_MS, startCollection } from '../../collector/run.js'
 import { nextRunAt, scheduleEnabled } from '../../collector/scheduler.js'
 import { peakEveryMin, peakWindow, windowDTO } from '../../lib/peak.js'
-import { offerDTO, runDTO, storeDTO } from '../../services/dto.js'
+import { offerDTO, offerInclude, runDTO, storeDTO } from '../../services/dto.js'
 import { getSenderSettings } from '../../services/settings.js'
 import { stateOf, waha, wahaConfigured } from '../../services/whatsapp/waha.js'
 
@@ -53,7 +53,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         where: { ...freshWhere, available: true, isDeal: true },
         orderBy: [{ pinned: 'desc' }, { score: 'desc' }],
         take: 8,
-        include: { store: true, watchItem: { select: { id: true, name: true } }, _count: { select: { clicks: true } } },
+        include: offerInclude,
       }),
       prisma.store.findMany({ orderBy: { sortOrder: 'asc' }, include: { _count: { select: { offers: true } } } }),
       whatsappSummary(),

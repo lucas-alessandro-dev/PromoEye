@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normalizeGtin } from './gtin.js'
 
 /**
  * Contrato da API do painel (/api/admin/*). O servidor valida a entrada com
@@ -139,6 +140,14 @@ export interface StoreDTO {
 
 // ── Ofertas ─────────────────────────────────────────────────────────────────
 
+/** EAN/GTIN opcional: vazio vira null; preenchido precisa ser um código válido (dígito verificador). */
+const optionalGtin = z
+  .union([z.string().trim().max(20), z.null()])
+  .optional()
+  .transform((v) => (v ? v : null))
+  .refine((v) => v === null || normalizeGtin(v) !== null, 'EAN inválido: confira os dígitos do código de barras')
+  .transform((v) => (v === null ? null : normalizeGtin(v)))
+
 export const offerUpdateInput = z.object({
   affiliateUrl: patchText(1200).refine(
     (v) => v === undefined || v === null || /^https:\/\//i.test(v),
@@ -174,6 +183,8 @@ export const manualOfferInput = z.object({
   price: money,
   listPrice: optionalMoney,
   sellerName: z.string().trim().max(120).optional().nullable(),
+  /** EAN do produto (na embalagem e na ficha da loja). Junta a oferta às das outras lojas no catálogo. */
+  gtin: optionalGtin,
 })
 export type ManualOfferInput = z.infer<typeof manualOfferInput>
 
@@ -193,10 +204,18 @@ export interface OfferDTO {
   price: number
   listPrice: number | null
   cardPrice: number | null
+  /** Preço no Pix quando a loja informa (pode ser menor que o `price`). */
+  pixPrice: number | null
   installments: string | null
   promoLabel: string | null
   available: boolean
   missingSince: string | null
+  /** EAN para mostrar (13 dígitos, em geral). */
+  gtin: string | null
+  brand: string | null
+  productId: string | null
+  /** Endereço público do produto no catálogo (/produtos/<slug>). */
+  productUrl: string | null
   lowestPrice: number
   highestPrice: number
   affiliateUrl: string | null
@@ -211,6 +230,132 @@ export interface OfferDTO {
   lastSeenAt: string
   lastChangeAt: string
   clicks: number
+}
+
+/** Liga (ou desliga, com null) uma oferta a um produto do catálogo pelo EAN. */
+export const offerProductInput = z.object({ gtin: optionalGtin })
+export type OfferProductInput = z.infer<typeof offerProductInput>
+
+// ── Catálogo (produtos por EAN) ─────────────────────────────────────────────
+
+export interface ProductDTO {
+  id: string
+  slug: string
+  /** EAN para mostrar (13 dígitos, em geral). */
+  gtin: string
+  name: string
+  brand: string | null
+  imageUrl: string | null
+  category: string | null
+  publicUrl: string
+  /** Ofertas ligadas e quantas estão disponíveis agora. */
+  offerCount: number
+  availableCount: number
+  storeCount: number
+  minPrice: number | null
+  minStoreName: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProductDetailDTO extends ProductDTO {
+  offers: OfferDTO[]
+}
+
+export interface ProductListDTO {
+  total: number
+  /** Produtos com 2 lojas ou mais: onde o EAN já está comparando de verdade. */
+  multiStore: number
+  products: ProductDTO[]
+}
+
+// ── Afiliados: verificação dos links ────────────────────────────────────────
+
+export type AffiliateMode = 'none' | 'param' | 'wrapper' | 'offer'
+export type CheckStatus = 'ok' | 'warn' | 'error' | 'none'
+
+export interface AffiliateCheckRow {
+  storeId: string
+  storeName: string
+  /** param = "tag=…" na URL; wrapper = rede que redireciona ({url}); offer = link colado na oferta. */
+  mode: AffiliateMode
+  status: CheckStatus
+  messages: string[]
+  sampleOfferId: string | null
+  /** O link que o /ir/ geraria para uma oferta real desta loja. */
+  sampleUrl: string | null
+  /** Só no teste ao vivo: onde o link foi parar depois dos redirecionamentos. */
+  finalUrl: string | null
+  hops: number | null
+}
+
+export interface AffiliateCheckDTO {
+  checkedAt: string
+  live: boolean
+  rows: AffiliateCheckRow[]
+  /** Ofertas manuais com link de afiliado colado à mão. */
+  offerLinks: AffiliateCheckRow[]
+}
+
+// ── Alertas de queda de preço (vitrine pública) ─────────────────────────────
+
+/** Texto exato do consentimento. Vai gravado em cada alerta (LGPD: prova do que a pessoa aceitou). */
+export const ALERT_CONSENT_TEXT =
+  'Quero receber por e-mail o aviso quando o preço deste item cair. Posso cancelar quando quiser pelo link que vem em cada e-mail.'
+
+/**
+ * Valor digitado por gente: "1.299,90", "1299,90", "R$ 1299" ou "1299.90".
+ * Vírgula = decimal brasileiro (pontos são milhar); sem vírgula, um ponto
+ * seguido de 1 ou 2 dígitos no fim é decimal. NaN quando não dá para ler.
+ */
+export function parseMoneyInput(text: string): number {
+  const t = text.replace(/[R$\s]/g, '')
+  if (!/^[\d.,]+$/.test(t)) return Number.NaN
+  if (t.includes(',')) return Number(t.replace(/\./g, '').replace(',', '.'))
+  if (/^\d+\.\d{1,2}$/.test(t)) return Number(t)
+  return Number(t.replace(/\./g, ''))
+}
+
+export const ALERT_STATUSES = ['PENDING', 'ACTIVE', 'UNSUBSCRIBED'] as const
+export type AlertStatus = (typeof ALERT_STATUSES)[number]
+
+/** Formulário público (vem como application/x-www-form-urlencoded, então tudo chega como texto). */
+export const alertSignupInput = z.object({
+  email: z.string().trim().toLowerCase().max(160).email('Confira o e-mail'),
+  /** Opcional: "me avise abaixo de R$ X". Vazio = qualquer promoção de verdade. */
+  targetPrice: z
+    .string()
+    .trim()
+    .max(20)
+    .optional()
+    .transform((v) => (v ? parseMoneyInput(v) : null))
+    .refine((v) => v === null || (Number.isFinite(v) && v > 0 && v < 10_000_000), 'Preço-alvo inválido: use só números, como 299,90'),
+  consent: z.literal('on', { errorMap: () => ({ message: 'Marque a caixa de consentimento para receber o aviso' }) }),
+  /** Armadilha para robô: campo escondido que gente não preenche. */
+  website: z.string().max(200).optional(),
+})
+export type AlertSignupInput = z.infer<typeof alertSignupInput>
+
+export interface AlertDTO {
+  id: string
+  email: string
+  status: AlertStatus
+  targetPrice: number | null
+  target: { kind: 'item' | 'product'; name: string; url: string }
+  createdAt: string
+  confirmedAt: string | null
+  unsubscribedAt: string | null
+  lastNotifiedAt: string | null
+  lastNotifiedPrice: number | null
+  notifyCount: number
+}
+
+export interface AlertsDTO {
+  /** SMTP_URL definido no .env: sem ele nenhum e-mail sai e o formulário some da vitrine. */
+  smtpConfigured: boolean
+  enabled: boolean
+  counts: { pending: number; active: number; unsubscribed: number; notified7d: number }
+  alerts: AlertDTO[]
 }
 
 export interface PricePointDTO {
@@ -397,6 +542,10 @@ export const settingsInput = z.object({
      * WhatsApp) depende disto: desligado, nada é gerado e nada sai.
      */
     autoDraft: z.boolean(),
+  }),
+  alerts: z.object({
+    /** Formulário "me avise quando baixar" na página do item. Só aparece com SMTP_URL no .env. */
+    enabled: z.boolean(),
   }),
 })
 export type SettingsInput = z.infer<typeof settingsInput>

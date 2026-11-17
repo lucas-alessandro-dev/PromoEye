@@ -24,6 +24,10 @@ export const DEFAULT_SETTINGS: SettingsInput = {
     groupInviteUrl: '',
     autoDraft: true,
   },
+  // Ligado, mas só aparece de verdade com SMTP_URL no .env.
+  alerts: {
+    enabled: true,
+  },
 }
 
 /**
@@ -57,6 +61,7 @@ export async function getSettings(): Promise<SettingsInput> {
     ...DEFAULT_SETTINGS,
     ...stored,
     whatsapp: { ...DEFAULT_SETTINGS.whatsapp, ...(stored.whatsapp ?? {}) },
+    alerts: { ...DEFAULT_SETTINGS.alerts, ...(stored.alerts ?? {}) },
   }
   const parsed = settingsInput.safeParse(merged)
   const value = parsed.success ? parsed.data : DEFAULT_SETTINGS

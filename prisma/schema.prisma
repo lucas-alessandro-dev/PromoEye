@@ -104,6 +104,31 @@ model WatchItem {
   updatedAt      DateTime       @updatedAt
   offers         Offer[]
   snapshots      ItemSnapshot[]
+  alerts         PriceAlert[]
+}
+
+// ── Catálogo ────────────────────────────────────────────────────────────────
+
+/// Um produto de verdade, identificado pelo código de barras (GTIN/EAN).
+/// Junta os anúncios do MESMO produto em lojas diferentes sob uma URL limpa
+/// (/produtos/<slug>), sem depender de adivinhar pelo título. Nasce sozinho
+/// quando o coletor vê um EAN válido (ver collector/catalog.ts).
+model Product {
+  id        String       @id @default(cuid())
+  /// Forma canônica de 14 dígitos (packages/shared/src/gtin.ts).
+  gtin      String       @unique
+  /// "<nome>-<ean>": estável e único, mesmo que o nome mude.
+  slug      String       @unique
+  name      String
+  brand     String?
+  /// Referência do fabricante, quando a loja informa (ex.: "BFR38").
+  modelRef  String?
+  imageUrl  String?
+  category  String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  offers    Offer[]
+  alerts    PriceAlert[]
 }
 
 // ── Anúncios encontrados ────────────────────────────────────────────────────
@@ -132,6 +157,9 @@ model Offer {
   listPrice       Decimal?          @db.Decimal(12, 2)
   /// Preço no cartão, quando difere do à vista.
   cardPrice       Decimal?          @db.Decimal(12, 2)
+  /// Preço no Pix, quando a loja informa. Fica à parte do `price` de propósito:
+  /// trocar a base do histórico criaria uma "queda" falsa (ver adapters/vtex.ts).
+  pixPrice        Decimal?          @db.Decimal(12, 2)
   installments    String?
   promoLabel      String? // ex.: "ESQUENTA BLACK DAS BLACKS"
   available       Boolean           @default(true)
@@ -143,6 +171,11 @@ model Offer {
   lowestPrice     Decimal           @db.Decimal(12, 2)
   lowestPriceAt   DateTime          @default(now())
   highestPrice    Decimal           @db.Decimal(12, 2)
+  /// GTIN/EAN canônico (14 dígitos) do SKU escolhido, quando a loja informa e é válido.
+  gtin            String?
+  brand           String?
+  productId       String?
+  product         Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
   /// Link de afiliado colado à mão. Vence o modelo da loja.
   affiliateUrl    String?
   hidden          Boolean           @default(false)
@@ -164,6 +197,8 @@ model Offer {
   @@unique([watchItemId, storeId, externalId])
   @@index([watchItemId, isDeal])
   @@index([isDeal, score])
+  @@index([productId])
+  @@index([gtin])
 }
 
 model PricePoint {
@@ -233,7 +268,7 @@ model Click {
   at       DateTime @default(now())
   /// Só o domínio de origem; nada de IP (LGPD).
   referrer String?
-  channel  String? // "site" | "whatsapp"
+  channel  String? // "site" | "whatsapp" | "email"
 
   @@index([offerId, at])
 }
@@ -272,6 +307,47 @@ model OutboundMessage {
 
   @@index([status, createdAt])
   @@index([offerId])
+}
+
+// ── Alertas de queda de preço (leads da vitrine) ───────────────────────────
+
+enum AlertStatus {
+  PENDING // esperando a pessoa confirmar pelo link do e-mail (opt-in duplo)
+  ACTIVE
+  UNSUBSCRIBED
+}
+
+/// "Me avise quando baixar": o e-mail de quem pediu, para um item OU um
+/// produto. Opt-in duplo (nada sai antes da confirmação), consentimento
+/// gravado com o texto exato e cancelamento em um clique (LGPD).
+model PriceAlert {
+  id                String      @id @default(cuid())
+  email             String
+  watchItemId       String?
+  watchItem         WatchItem?  @relation(fields: [watchItemId], references: [id], onDelete: Cascade)
+  productId         String?
+  product           Product?    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// Vazio = qualquer promoção de verdade; preenchido = só abaixo deste preço.
+  targetPrice       Decimal?    @db.Decimal(12, 2)
+  status            AlertStatus @default(PENDING)
+  /// Os links dos e-mails (confirmar, cancelar) levam o id assinado com HMAC
+  /// (services/alerts/tokens.ts): não há token guardado para vazar do banco.
+  consentText       String
+  consentAt         DateTime
+  confirmedAt       DateTime?
+  unsubscribedAt    DateTime?
+  /// Quantos e-mails de confirmação já mandamos (reenvio limitado).
+  confirmSends      Int         @default(0)
+  lastConfirmSentAt DateTime?
+  lastNotifiedAt    DateTime?
+  lastNotifiedPrice Decimal?    @db.Decimal(12, 2)
+  notifyCount       Int         @default(0)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([status, watchItemId])
+  @@index([status, productId])
+  @@index([email])
 }
 
 // ── Configurações gerais ────────────────────────────────────────────────────

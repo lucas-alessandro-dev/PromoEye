@@ -1,4 +1,4 @@
-import type { MessageDTO, OfferDTO, RunDTO, StoreDTO, WatchItemDTO } from '@promoeye/shared'
+import { displayGtin, type MessageDTO, type OfferDTO, type RunDTO, type StoreDTO, type WatchItemDTO } from '@promoeye/shared'
 import type { CollectorRun, Offer, OutboundMessage, Store, WatchItem } from '@prisma/client'
 import { publicUrl } from '../config.js'
 import { num, numReq } from '../lib/prisma.js'
@@ -9,8 +9,18 @@ const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null)
 export type OfferWithRefs = Offer & {
   store: Store
   watchItem: Pick<WatchItem, 'id' | 'name'>
+  /** Inclua `product: { select: { slug: true } }` na consulta para o painel ganhar o link do catálogo. */
+  product?: { slug: string } | null
   _count?: { clicks: number }
 }
+
+/** O `include` que dá tudo o que o offerDTO usa. */
+export const offerInclude = {
+  store: true,
+  watchItem: { select: { id: true, name: true } },
+  product: { select: { slug: true } },
+  _count: { select: { clicks: true } },
+} as const
 
 export function offerDTO(o: OfferWithRefs): OfferDTO {
   return {
@@ -29,10 +39,15 @@ export function offerDTO(o: OfferWithRefs): OfferDTO {
     price: numReq(o.price),
     listPrice: num(o.listPrice),
     cardPrice: num(o.cardPrice),
+    pixPrice: num(o.pixPrice),
     installments: o.installments,
     promoLabel: o.promoLabel,
     available: o.available,
     missingSince: iso(o.missingSince),
+    gtin: o.gtin ? displayGtin(o.gtin) : null,
+    brand: o.brand,
+    productId: o.productId,
+    productUrl: o.product ? `${publicUrl}/produtos/${o.product.slug}` : null,
     lowestPrice: numReq(o.lowestPrice),
     highestPrice: numReq(o.highestPrice),
     affiliateUrl: o.affiliateUrl,
