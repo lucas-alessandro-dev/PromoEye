@@ -28,7 +28,8 @@
     "db:seed": "tsx --env-file-if-exists=.env prisma/seed.ts",
     "collect": "tsx --env-file-if-exists=.env apps/server/src/cli/collect.ts",
     "create-admin": "tsx --env-file-if-exists=.env apps/server/src/cli/create-admin.ts",
-    "probe": "tsx --env-file-if-exists=.env apps/server/src/cli/probe.ts"
+    "probe": "tsx --env-file-if-exists=.env apps/server/src/cli/probe.ts",
+    "check:affiliates": "tsx --env-file-if-exists=.env apps/server/src/cli/check-affiliates.ts"
   },
   "prisma": {
     "seed": "tsx --env-file-if-exists=.env prisma/seed.ts"
