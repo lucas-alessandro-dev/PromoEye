@@ -91,7 +91,8 @@ services:
     networks:
       whatsapp: {}
       whatsapp-out: {}
-    mem_limit: 512m
+    # Parado, sem número conectado, já usa ~325 MB (medido em 16/11/2026).
+    mem_limit: 768m
 
 networks:
   internal:

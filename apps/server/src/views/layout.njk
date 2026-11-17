@@ -14,6 +14,7 @@
         com rótulo 4.9:1; o petróleo #072C2C do stitch é o fundo inverso.
   type: Mona Sans (sorteada em library/type.json para software), display 500.
 #}
+{% from "partials/_macros.njk" import waIcon %}
 <html lang="pt-BR" data-type="software" data-radius="soft" data-ground="sky" data-buttons="arrow" data-motion>
 <head>
 <meta charset="utf-8">
@@ -78,9 +79,17 @@
       <div class="nav__item"><a class="nav__link" href="/#selos">Selos</a></div>
       <div class="nav__item"><a class="nav__link" href="/#perguntas">Perguntas</a></div>
     </nav>
+    {# O grupo do WhatsApp é a ação principal do site: o botão verde fica na barra em toda página
+       (no celular, encurtado para "Grupo"). Sem convite configurado, volta o "Ver as promoções". #}
+    {% if site.whatsappInvite %}
+    <div class="nav__actions nav__actions--wa">
+      <a class="btn btn--primary btn--wa" href="{{ site.whatsappInvite }}" target="_blank" rel="noopener">{{ waIcon() }}<span>Grupo<span class="btn--wa__long"> do WhatsApp</span></span></a>
+    </div>
+    {% else %}
     <div class="nav__actions">
       <a class="btn btn--primary" href="/#ofertas">Ver as promoções</a>
     </div>
+    {% endif %}
     <button class="nav__toggle" type="button" aria-expanded="false" aria-label="Menu">
       <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 5h14M2 13h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
     </button>
@@ -99,7 +108,10 @@
           <h2 id="close-h">{% block closeTitle %}As promoções de hoje, conferidas{% endblock %}</h2>
           <p class="t-lead">{% if lastRunAt %}Última coleta às {{ lastRunAt | hourBR }}. A próxima sai no minuto 5 da hora que vem.{% else %}A primeira coleta sai no minuto 5 da próxima hora.{% endif %}</p>
         </div>
-        <a class="btn btn--primary" href="/#ofertas">Ver as promoções<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+        <div class="btn-row">
+          {% if site.whatsappInvite %}<a class="btn btn--primary btn--wa" href="{{ site.whatsappInvite }}" target="_blank" rel="noopener">{{ waIcon() }}Entrar no grupo do WhatsApp</a>{% endif %}
+          <a class="btn {{ 'btn--secondary' if site.whatsappInvite else 'btn--primary' }}" href="/#ofertas">Ver as promoções<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+        </div>
       </div>
       <p class="close__word" aria-hidden="true" translate="no">{{ site.title }}</p>
     </div>

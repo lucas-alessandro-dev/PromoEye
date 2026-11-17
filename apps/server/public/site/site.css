@@ -68,6 +68,51 @@ a, button, summary, select, input, label, [role="tab"] { touch-action: manipulat
   .pe-offer__price .pe-go { justify-self: end; margin: 0; }
 }
 
+/* ══ GRUPO DO WHATSAPP ══════════════════════════════════════════════════════════════════════
+   A ação principal do site. O botão é o .btn--primary do kit com as cores trocadas, então altura,
+   foco e o tamanho do celular vêm de lá. Dois verdes do próprio WhatsApp:
+     · no fundo claro, o verde escuro #008069 com texto branco (4,9:1; 4,5:1 contra o fundo #F7F5EE);
+     · no fundo escuro (a faixa do grupo, o rodapé), o verde vivo #25D366 com tinta escura (8,9:1). */
+:root { --wa: #25D366; --wa-deep: #008069; }
+.btn--wa { --action: var(--wa-deep); --action-ink: #fff; --wa-hover: #006b58; }
+:is(.wa-cta, .ground-inverse) .btn--wa { --action: var(--wa); --action-ink: #0b1f14; --wa-hover: #4fe08a; }
+.btn--primary.btn--wa:hover, html:not([data-motion="off"]) .btn--primary.btn--wa:hover { background: var(--wa-hover); }
+/* o símbolo abre o botão; a seta do kit sai, para não ficar símbolo + seta (a faixa usa a seta desenhada) */
+html[data-buttons] .btn.btn--wa::after { content: none; display: none; }
+.btn--wa .wa-ic { width: 18px; height: 18px; flex: none; }
+.btn--wa:focus-visible { outline: 2px solid var(--action); outline-offset: 3px; }
+
+/* A faixa da loja: o petróleo do rodapé, um brilho verde no canto e o selo redondo do WhatsApp. */
+.wa-cta { --ink: var(--p-inv-ink); --muted: var(--p-inv-muted);
+  position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px 20px;
+  margin: 0 0 24px; padding: 20px 20px 20px 24px; border-radius: var(--pe-r); overflow: hidden; isolation: isolate;
+  background: radial-gradient(90% 160% at 0% 0%, rgb(37 211 102 / .22), transparent 60%), var(--p-inv-bg); color: var(--ink); }
+.wa-cta::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / .06); }
+.wa-cta__badge { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: var(--wa); color: #fff;
+  box-shadow: 0 0 0 6px rgb(37 211 102 / .16); }
+.wa-cta__badge .wa-ic { width: 28px; height: 28px; }
+.wa-cta__text { min-width: 0; }
+.wa-cta h2 { margin: 0; font: var(--display-weight) clamp(19px, 0.6vw + 14px, 23px)/1.22 var(--font-display);
+  font-stretch: var(--display-stretch); letter-spacing: -0.015em; color: var(--ink); text-wrap: balance; }
+.wa-cta p { margin: 4px 0 0; font-size: 15px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
+.wa-cta__btn { height: 48px; padding-inline: 22px; font-size: 16px; }
+/* no rodapé, o botão do grupo e "Ver as promoções" lado a lado. O kit faz todo div filho de
+   .section-head--split virar grade de uma coluna; a fileira de botões volta a ser flex. */
+.section-head--split > .btn-row { display: flex; gap: var(--s-3); max-width: none; }
+@media (min-width: 640px) { .section-head--split > .btn-row { flex-wrap: nowrap; } }
+@media (max-width: 899px) {
+  .wa-cta { grid-template-columns: auto minmax(0, 1fr); }
+  .wa-cta__btn { grid-column: 1 / -1; width: 100%; }
+}
+@media (max-width: 639px) {
+  .wa-cta { gap: 12px 14px; margin-bottom: 18px; padding: 16px; align-items: start; }
+  .wa-cta__badge { width: 40px; height: 40px; box-shadow: 0 0 0 4px rgb(37 211 102 / .16); }
+  .wa-cta__badge .wa-ic { width: 22px; height: 22px; }
+  .wa-cta h2 { font-size: 17px; }
+  .wa-cta p { font-size: 14px; }
+}
+
 /* ══ LOJA (/) ═══════════════════════════════════════════════════════════════════════════════ */
 .shop { padding: calc(var(--nav, 72px) + 28px) 0 80px; }
 .shop > .wrap { display: block; }
@@ -152,9 +197,13 @@ a, button, summary, select, input, label, [role="tab"] { touch-action: manipulat
   .shop-head { grid-template-columns: 1fr; align-items: stretch; }
 }
 @media (max-width: 639px) {
-  /* o menu sanduíche já tem o botão "Ver as promoções": no celular o cabeçalho fica só com marca e menu */
-  .nav:not(.is-open) .nav__actions { display: none; }
-  .nav:not(.is-open) .nav__toggle, .nav:not(.is-open) .nav__actions + .nav__toggle { margin-left: auto; }
+  /* o menu sanduíche já tem o botão "Ver as promoções": no celular o cabeçalho fica só com marca e menu.
+     O botão do grupo do WhatsApp é a exceção: fica na barra, encurtado para o símbolo e "Grupo". */
+  .nav:not(.is-open) .nav__actions:not(.nav__actions--wa) { display: none; }
+  .nav:not(.is-open) .nav__toggle, .nav:not(.is-open) .nav__actions:not(.nav__actions--wa) + .nav__toggle { margin-left: auto; }
+  .nav:not(.is-open) .nav__actions--wa + .nav__toggle { margin-left: 0; }
+  .nav:not(.is-open) .btn--wa__long { display: none; }
+  .nav:not(.is-open) .nav__actions .btn--wa { gap: 6px; }
 
   .shop { padding: calc(var(--nav, 64px) + 16px) 0 56px; }
   .shop-head { gap: 14px; padding-bottom: 16px; }
