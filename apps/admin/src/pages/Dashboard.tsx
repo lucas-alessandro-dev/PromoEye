@@ -17,7 +17,8 @@ export function Dashboard() {
   if (error && !data) return <ErrorBox error={error} onRetry={reload} />
   if (!data) return null
 
-  const { lastRun, nextRunAt, scheduleEnabled, counts, topDeals, stores } = data
+  const { lastRun, nextRunAt, scheduleEnabled, counts, topDeals, stores, whatsapp } = data
+  const waDown = whatsapp.autoSend && whatsapp.state !== 'WORKING'
 
   return (
     <div className="page">
@@ -27,6 +28,17 @@ export function Dashboard() {
           <p className="lead">O que o PromoEye encontrou nas lojas confiáveis.</p>
         </div>
       </header>
+
+      {waDown && (
+        <div className="notice notice-warn" role="alert">
+          <p>
+            O envio automático está ligado, mas o WhatsApp não está conectado
+            {whatsapp.state === 'UNREACHABLE' ? ' (o WAHA não respondeu)' : ''}. As promoções estão parando na fila
+            {counts.queuedMessages > 0 ? ` (${counts.queuedMessages} agora)` : ''}.{' '}
+            <Link to="/whatsapp">Conectar de novo</Link>
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-3">
         <section className="card" aria-labelledby="h-last-run">
@@ -74,6 +86,12 @@ export function Dashboard() {
               <dt>Mensagens para enviar</dt>
               <dd>{counts.draftMessages > 0 ? <Link to="/whatsapp">{counts.draftMessages}</Link> : 0}</dd>
             </div>
+            {(whatsapp.autoSend || counts.queuedMessages > 0) && (
+              <div>
+                <dt>Na fila do WhatsApp</dt>
+                <dd>{counts.queuedMessages}</dd>
+              </div>
+            )}
             <div>
               <dt>Cliques em 7 dias</dt>
               <dd>{counts.clicks7d}</dd>

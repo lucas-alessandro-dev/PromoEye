@@ -14,6 +14,12 @@ fi
 # Arquivos vindos do Windows podem chegar com CRLF, que quebra o sh.
 find src -name '*.sh' -exec sed -i 's/\r$//' {} +
 
+# Chave do WAHA (envio pelo WhatsApp). Instalações anteriores não têm: cria uma vez.
+if ! grep -q '^WAHA_API_KEY=' .env; then
+  printf '\n# WAHA (WhatsApp). Mesma chave no app e no container do WAHA.\nWAHA_API_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
+  echo "→ WAHA_API_KEY criada em $PROJECT_DIR/.env"
+fi
+
 cp src/ops/vps/compose.yml compose.yml
 mkdir -p backups
 

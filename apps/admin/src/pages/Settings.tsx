@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import { settingsInput, type SettingsInput } from '@promoeye/shared'
 import { ApiError, api, errorMessage } from '../api'
 import { useToast } from '../context/toast'
@@ -26,9 +27,8 @@ export function Settings() {
 
   useEffect(() => {
     if (data) {
-      const { providerTokenSet: _ignored, ...rest } = data
-      setForm(rest)
-      setPct(String(rest.defaultMinDiscountPct))
+      setForm(data)
+      setPct(String(data.defaultMinDiscountPct))
     }
   }, [data])
 
@@ -57,9 +57,8 @@ export function Settings() {
     setBusy(true)
     try {
       const saved = await api.saveSettings(parsed.data)
-      const { providerTokenSet: _ignored, ...rest } = saved
-      setForm(rest)
-      setPct(String(rest.defaultMinDiscountPct))
+      setForm(saved)
+      setPct(String(saved.defaultMinDiscountPct))
       toast('Configurações salvas.')
     } catch (err) {
       if (err instanceof ApiError && err.issues.length) {
@@ -180,10 +179,16 @@ export function Settings() {
             </div>
             <div className="span-2">
               <Switch
-                label="Gerar rascunho quando surgir promoção nova"
+                label="Gerar mensagem quando surgir promoção nova"
                 checked={form.whatsapp.autoDraft}
                 onChange={(v) => setWa('autoDraft', v)}
-                hint="Uma mensagem por item, só da oferta mais barata e só quando o preço cai abaixo da última mensagem."
+                hint={
+                  <>
+                    Uma mensagem por item, só da oferta mais barata e só quando o preço cai abaixo da última mensagem. Desligado,
+                    o envio automático também para. Conexão do número e envio automático ficam em{' '}
+                    <Link to="/whatsapp">WhatsApp</Link>.
+                  </>
+                }
               />
             </div>
           </div>

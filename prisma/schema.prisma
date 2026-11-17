@@ -114,52 +114,52 @@ enum OfferSource {
 }
 
 model Offer {
-  id             String         @id @default(cuid())
-  watchItemId    String
-  watchItem      WatchItem      @relation(fields: [watchItemId], references: [id], onDelete: Cascade)
-  storeId        String
-  store          Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  source         OfferSource    @default(AUTO)
-  externalId     String // SKU/ASIN/id do produto na loja
-  title          String
-  url            String
-  imageUrl       String?
-  sellerName     String?
-  soldByStore    Boolean?
+  id              String            @id @default(cuid())
+  watchItemId     String
+  watchItem       WatchItem         @relation(fields: [watchItemId], references: [id], onDelete: Cascade)
+  storeId         String
+  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  source          OfferSource       @default(AUTO)
+  externalId      String // SKU/ASIN/id do produto na loja
+  title           String
+  url             String
+  imageUrl        String?
+  sellerName      String?
+  soldByStore     Boolean?
   /// Melhor preço à vista (Pix/boleto quando a loja informa).
-  price          Decimal        @db.Decimal(12, 2)
+  price           Decimal           @db.Decimal(12, 2)
   /// Preço "de" que a loja anuncia.
-  listPrice      Decimal?       @db.Decimal(12, 2)
+  listPrice       Decimal?          @db.Decimal(12, 2)
   /// Preço no cartão, quando difere do à vista.
-  cardPrice      Decimal?       @db.Decimal(12, 2)
-  installments   String?
-  promoLabel     String? // ex.: "ESQUENTA BLACK DAS BLACKS"
-  available      Boolean        @default(true)
+  cardPrice       Decimal?          @db.Decimal(12, 2)
+  installments    String?
+  promoLabel      String? // ex.: "ESQUENTA BLACK DAS BLACKS"
+  available       Boolean           @default(true)
   /// Quando o coletor deixou de ver o anúncio (some da busca ≠ esgotou).
-  missingSince   DateTime?
-  firstSeenAt    DateTime       @default(now())
-  lastSeenAt     DateTime       @default(now())
-  lastChangeAt   DateTime       @default(now())
-  lowestPrice    Decimal        @db.Decimal(12, 2)
-  lowestPriceAt  DateTime       @default(now())
-  highestPrice   Decimal        @db.Decimal(12, 2)
+  missingSince    DateTime?
+  firstSeenAt     DateTime          @default(now())
+  lastSeenAt      DateTime          @default(now())
+  lastChangeAt    DateTime          @default(now())
+  lowestPrice     Decimal           @db.Decimal(12, 2)
+  lowestPriceAt   DateTime          @default(now())
+  highestPrice    Decimal           @db.Decimal(12, 2)
   /// Link de afiliado colado à mão. Vence o modelo da loja.
-  affiliateUrl   String?
-  hidden         Boolean        @default(false)
-  pinned         Boolean        @default(false)
+  affiliateUrl    String?
+  hidden          Boolean           @default(false)
+  pinned          Boolean           @default(false)
   /// 0–100. Recalculado a cada coleta (ver collector/scoring.ts).
-  score          Float          @default(0)
+  score           Float             @default(0)
   /// Selos: "menor-preco", "abaixo-do-alvo", "mais-barato", "preco-de-inflado"…
-  flags          String[]       @default([])
+  flags           String[]          @default([])
   /// Desconto real: contra a mediana dos últimos 30 dias que NÓS vimos.
   realDiscountPct Float?
-  isDeal         Boolean        @default(false)
-  dealSince      DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  history        PricePoint[]
-  clicks         Click[]
-  messages       OutboundMessage[]
+  isDeal          Boolean           @default(false)
+  dealSince       DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  history         PricePoint[]
+  clicks          Click[]
+  messages        OutboundMessage[]
 
   @@unique([watchItemId, storeId, externalId])
   @@index([watchItemId, isDeal])
@@ -204,22 +204,22 @@ enum RunStatus {
 }
 
 model CollectorRun {
-  id            String    @id @default(cuid())
-  trigger       String // "schedule" | "manual" | "cli"
-  status        RunStatus @default(RUNNING)
-  startedAt     DateTime  @default(now())
-  finishedAt    DateTime?
-  itemsChecked  Int       @default(0)
-  requests      Int       @default(0)
-  offersSeen    Int       @default(0)
-  offersNew     Int       @default(0)
-  priceChanges  Int       @default(0)
-  newDeals      Int       @default(0)
+  id           String    @id @default(cuid())
+  trigger      String // "schedule" | "manual" | "cli"
+  status       RunStatus @default(RUNNING)
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  itemsChecked Int       @default(0)
+  requests     Int       @default(0)
+  offersSeen   Int       @default(0)
+  offersNew    Int       @default(0)
+  priceChanges Int       @default(0)
+  newDeals     Int       @default(0)
   /// [{ store, item, message }]
-  errors        Json      @default("[]")
+  errors       Json      @default("[]")
   /// Amostra do que o filtro descartou e por quê: [{ store, item, title, price, reason }].
   /// Mostra na vitrine e no painel que o filtro trabalha, com casos reais.
-  rejects       Json      @default("[]")
+  rejects      Json      @default("[]")
 
   @@index([startedAt])
 }
@@ -239,27 +239,36 @@ model Click {
 }
 
 enum MessageStatus {
-  DRAFT // pronta para copiar/enviar
+  DRAFT // pronta para você revisar, copiar ou mandar pelo painel
+  QUEUED // na fila do envio automático (WAHA)
+  SENDING // saindo agora; se o servidor cair aqui, vira FAILED na volta
   SENT
   DISCARDED
   FAILED
 }
 
-/// Fila de saída para o grupo de WhatsApp. Hoje: copiar e colar.
-/// Amanhã: um provedor (Evolution API, Z-API, Cloud API) consome esta fila.
+/// Fila de saída para o grupo de WhatsApp. Rascunhos (DRAFT) saem à mão; os
+/// da fila (QUEUED) o PromoEye manda sozinho pelo WAHA, com limite por hora e
+/// horário de silêncio (apps/server/src/services/whatsapp/queue.ts).
 model OutboundMessage {
-  id        String        @id @default(cuid())
-  channel   String        @default("whatsapp")
-  offerId   String?
-  offer     Offer?        @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  id         String        @id @default(cuid())
+  channel    String        @default("whatsapp")
+  offerId    String?
+  offer      Offer?        @relation(fields: [offerId], references: [id], onDelete: SetNull)
   /// Preço que gerou a mensagem; evita repetir a mesma promoção.
-  price     Decimal?      @db.Decimal(12, 2)
-  reason    String? // "menor-preco", "abaixo-do-alvo"…
-  body      String
-  status    MessageStatus @default(DRAFT)
-  error     String?
-  createdAt DateTime      @default(now())
-  sentAt    DateTime?
+  price      Decimal?      @db.Decimal(12, 2)
+  reason     String? // "menor-preco", "abaixo-do-alvo"…
+  body       String
+  status     MessageStatus @default(DRAFT)
+  error      String?
+  /// Tentativas de envio automático (desiste na 3ª).
+  attempts   Int           @default(0)
+  /// Quando entrou na fila: a ordem de envio e o prazo de validade contam daqui.
+  queuedAt   DateTime?
+  /// Id da mensagem no WhatsApp, devolvido pelo WAHA.
+  providerId String?
+  createdAt  DateTime      @default(now())
+  sentAt     DateTime?
 
   @@index([status, createdAt])
   @@index([offerId])

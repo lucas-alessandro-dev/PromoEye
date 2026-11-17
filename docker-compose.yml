@@ -39,6 +39,8 @@ services:
       COLLECT_ENABLED: 'true'
       TRUST_PROXY: 'true'
       TZ: America/Sao_Paulo
+      WAHA_URL: ${WAHA_API_KEY:+http://waha:3000}
+      WAHA_API_KEY: ${WAHA_API_KEY:-}
     ports:
       # Só para testar a imagem de produção no seu computador. A VPS usa ops/vps/compose.yml.
       - '127.0.0.1:${APP_PORT:-3010}:3000'
@@ -49,5 +51,26 @@ services:
       retries: 5
       start_period: 20s
 
+  # WhatsApp (envio automático). Só sobe quando pedido: `docker compose up -d waha`.
+  # No .env: WAHA_URL=http://localhost:3100 e a mesma WAHA_API_KEY daqui.
+  waha:
+    image: devlikeapro/waha:gows-2026.10.1
+    restart: unless-stopped
+    profiles: ['whatsapp']
+    environment:
+      WHATSAPP_DEFAULT_ENGINE: GOWS
+      # Opcional aqui (e não ":?") para não travar o `docker compose up -d db` de quem não usa WhatsApp.
+      WAHA_API_KEY: ${WAHA_API_KEY:-}
+      WAHA_DASHBOARD_ENABLED: 'false'
+      WHATSAPP_SWAGGER_ENABLED: 'false'
+      WHATSAPP_RESTART_ALL_SESSIONS: 'True'
+      WAHA_RESTART_ALL_SESSIONS: 'True'
+      TZ: America/Sao_Paulo
+    volumes:
+      - waha-sessions:/app/.sessions
+    ports:
+      - '127.0.0.1:3100:3000'
+
 volumes:
   db-data:
+  waha-sessions:

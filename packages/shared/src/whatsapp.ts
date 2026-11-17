@@ -47,3 +47,28 @@ export function formatWhatsAppMessage(o: WhatsAppOfferInput): string {
   lines.push(`👉 ${o.link}`)
   return lines.join('\n')
 }
+
+// ── Horário de silêncio ─────────────────────────────────────────────────────
+
+const spHour = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', hour: 'numeric', hourCycle: 'h23' })
+
+/** Hora cheia (0–23) no horário de Brasília, seja qual for o fuso do servidor. */
+export function hourInSaoPaulo(d: Date = new Date()): number {
+  return Number(spHour.format(d)) % 24
+}
+
+/**
+ * A hora cai no intervalo [start, end)? O intervalo pode passar da meia-noite
+ * (22 → 8 silencia das 22:00 às 07:59). start igual a end: nunca silencia.
+ */
+export function inQuietHours(hour: number, start: number, end: number): boolean {
+  if (start === end) return false
+  return start < end ? hour >= start && hour < end : hour >= start || hour < end
+}
+
+/** "5511912345678" → "+55 11 91234-5678". Outros formatos: "+" e os dígitos. */
+export function formatPhone(digits: string | null | undefined): string {
+  if (!digits) return ''
+  const m = /^55(\d{2})(\d{4,5})(\d{4})$/.exec(digits)
+  return m ? `+55 ${m[1]} ${m[2]}-${m[3]}` : `+${digits}`
+}

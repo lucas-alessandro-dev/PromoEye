@@ -26,11 +26,11 @@
     <section class="pdp" aria-labelledby="pdp-h">
       <div class="pdp__gallery">
         <div class="pdp__stage">
-          {% if images.length %}<img id="pdp-main" src="{{ images[0] }}" alt="{{ item.name }}" decoding="async" referrerpolicy="no-referrer">{% else %}<span class="pc__noimg" aria-hidden="true"></span>{% endif %}
+          {% if images.length %}<img id="pdp-main" src="{{ images[0] }}" alt="{{ item.name }}" width="800" height="600" fetchpriority="high" referrerpolicy="no-referrer">{% else %}<span class="pc__noimg" aria-hidden="true"></span>{% endif %}
         </div>
         {% if images.length > 1 %}
         <div class="pdp__thumbs" data-thumbs hidden>
-          {% for src in images %}<button type="button" class="pdp__thumb" data-src="{{ src }}" aria-label="Ver a foto {{ loop.index }} de {{ images.length }}" aria-pressed="{{ 'true' if loop.first else 'false' }}"><img src="{{ src }}" alt="" loading="lazy" referrerpolicy="no-referrer"></button>{% endfor %}
+          {% for src in images %}<button type="button" class="pdp__thumb" data-src="{{ src }}" aria-label="Ver a foto {{ loop.index }} de {{ images.length }}" aria-pressed="{{ 'true' if loop.first else 'false' }}"><img src="{{ src }}" alt="" width="56" height="56" loading="lazy" decoding="async" referrerpolicy="no-referrer"></button>{% endfor %}
         </div>
         {% endif %}
       </div>
@@ -148,8 +148,11 @@
       {% if ch %}
       <div class="hc">
         <div class="hc__y" aria-hidden="true">{% for t in ch.yTicks %}<span style="top: {{ t.pct }}%">{{ t.value | brlShort }}</span>{% endfor %}</div>
+        {# Focável e navegável pelas setas: é um grupo interativo, não uma imagem. O valor de cada
+           passo é anunciado na região aria-live logo abaixo (o balão visual é aria-hidden). #}
         <div class="hc__plot" tabindex="0" data-points="{{ history.chartData }}"
-             role="img" aria-label="Menor preço entre as lojas desde {{ ch.first | dateBR }}: mínimo de {{ ch.min.price | brl }} em {{ ch.min.at | dateBR }}, máximo de {{ ch.max.price | brl }}, agora {{ ch.last.price | brl }}{% if ch.typical %}; preço típico {{ ch.typical.value | brl }}{% endif %}. Os valores estão na tabela abaixo.">
+             role="group" aria-roledescription="gráfico"
+             aria-label="Menor preço entre as lojas desde {{ ch.first | dateBR }}: mínimo de {{ ch.min.price | brl }} em {{ ch.min.at | dateBR }}, máximo de {{ ch.max.price | brl }}, agora {{ ch.last.price | brl }}{% if ch.typical %}; preço típico {{ ch.typical.value | brl }}{% endif %}. Use as setas para percorrer as mudanças; os valores também estão na tabela abaixo.">
           <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
             {% for t in ch.yTicks %}<path class="hc__grid" d="M0,{{ t.pct * 10 }} H1000"/>{% endfor %}
             <path class="hc__area" d="{{ ch.area }}"/>
@@ -164,6 +167,7 @@
           <div class="hc__cursor" hidden aria-hidden="true"><i class="hc__vline"></i><i class="hc__cdot"></i><div class="hc__tip"><b></b><span></span></div></div>
         </div>
         <div class="hc__x" aria-hidden="true">{% for t in ch.xTicks %}<span style="left: {{ t.pct }}%">{{ t.label }}</span>{% endfor %}</div>
+        <p class="sr-only" id="hc-live" aria-live="polite" data-hc-live></p>
       </div>
       <p class="hc-legend" aria-hidden="true">
         <span><i class="hc-legend__line"></i>Menor preço entre as lojas</span>
@@ -173,7 +177,7 @@
       {% else %}
       <div class="hc-empty">
         <p><b>O gráfico se forma a partir da segunda coleta.</b></p>
-        <p>{% if history.since %}Começamos a acompanhar em {{ history.since | dateBR }}{% if history.lowest %}, a {{ history.lowest.price | brl }}{% endif %}. {% endif %}Cada coleta, no minuto 5 de cada hora, acrescenta um ponto. Para a Black Friday, o histórico de algumas semanas é o que mostra se o desconto é de verdade.</p>
+        <p>{% if history.since %}Acompanhado desde {{ history.since | dateBR }}{% if history.lowest %}, quando custava {{ history.lowest.price | brl }}{% endif %}. {% endif %}Cada coleta, no minuto 5 de cada hora, acrescenta um ponto. Para a Black Friday, o histórico de algumas semanas é o que mostra se o desconto é de verdade.</p>
       </div>
       {% endif %}
 

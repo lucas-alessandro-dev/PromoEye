@@ -11,11 +11,14 @@ import type {
   PreviewRow,
   PricePointDTO,
   RunDTO,
+  SenderSettings,
   SettingsDTO,
   SettingsInput,
   StoreDTO,
   WatchItemDTO,
   WatchItemInput,
+  WhatsAppGroupDTO,
+  WhatsAppStatusDTO,
 } from '@promoeye/shared'
 
 /**
@@ -210,6 +213,18 @@ export const api = {
   messages: (status?: MessageDTO['status']) => request<MessageDTO[]>('GET', `/messages${qs({ status })}`),
   updateMessage: (id: string, input: MessageUpdateInput) =>
     request<MessageDTO>('PATCH', `/messages/${encodeURIComponent(id)}`, input),
+  /** Manda na hora pelo WAHA. Em erro, o ApiError traz a mensagem atualizada em `data.message`. */
+  sendMessage: (id: string) => request<MessageDTO>('POST', `/messages/${encodeURIComponent(id)}/send`),
+
+  // Envio automático (WAHA)
+  whatsappStatus: () => request<WhatsAppStatusDTO>('GET', '/whatsapp/status'),
+  whatsappConnect: () => request<WhatsAppStatusDTO>('POST', '/whatsapp/connect'),
+  whatsappQr: () => request<{ image: string }>('GET', '/whatsapp/qr'),
+  whatsappPair: (phone: string) => request<{ code: string }>('POST', '/whatsapp/pair', { phone }),
+  whatsappLogout: () => request<WhatsAppStatusDTO>('POST', '/whatsapp/logout'),
+  whatsappGroups: () => request<WhatsAppGroupDTO[]>('GET', '/whatsapp/groups'),
+  saveSender: (input: SenderSettings) => request<WhatsAppStatusDTO>('PUT', '/whatsapp/settings', input),
+  whatsappTest: (target: 'me' | 'group') => request<{ ok: true }>('POST', '/whatsapp/test', { target }),
 
   // Configurações
   settings: () => request<SettingsDTO>('GET', '/settings'),

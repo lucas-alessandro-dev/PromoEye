@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { messageUpdateInput, settingsInput } from '@promoeye/shared'
+import { MESSAGE_STATUSES, messageUpdateInput, settingsInput } from '@promoeye/shared'
 import { prisma } from '../../lib/prisma.js'
 import { parse } from '../../lib/validate.js'
 import { messageDTO } from '../../services/dto.js'
@@ -12,12 +12,11 @@ export async function messageRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
 
   app.get('/messages', async (request) => {
-    const { status } = z
-      .object({ status: z.enum(['DRAFT', 'SENT', 'DISCARDED', 'FAILED']).optional() })
-      .parse(request.query)
+    const { status } = z.object({ status: z.enum(MESSAGE_STATUSES).optional() }).parse(request.query)
     const rows = await prisma.outboundMessage.findMany({
       where: status ? { status } : {},
-      orderBy: { createdAt: 'desc' },
+      // A fila na ordem em que vai sair; o resto, mais novo primeiro.
+      orderBy: status === 'QUEUED' ? [{ queuedAt: 'asc' }, { createdAt: 'asc' }] : { createdAt: 'desc' },
       take: 200,
       include,
     })
@@ -29,12 +28,20 @@ export async function messageRoutes(app: FastifyInstance) {
     if (!input) return reply
     const exists = await prisma.outboundMessage.findUnique({ where: { id: request.params.id } })
     if (!exists) return reply.code(404).send({ error: 'Mensagem não encontrada.' })
+    if (exists.status === 'SENDING') return reply.code(409).send({ error: 'Essa mensagem está saindo agora. Espere alguns segundos.' })
+    const status = input.status
     const updated = await prisma.outboundMessage.update({
       where: { id: exists.id },
       data: {
         ...(input.body !== undefined ? { body: input.body } : {}),
-        ...(input.status !== undefined
-          ? { status: input.status, sentAt: input.status === 'SENT' ? new Date() : null }
+        ...(status !== undefined
+          ? {
+              status,
+              sentAt: status === 'SENT' ? new Date() : null,
+              // Entrar na fila de novo é recomeçar: prazo, tentativas e erro zerados.
+              ...(status === 'QUEUED' ? { queuedAt: new Date(), attempts: 0, error: null } : {}),
+              ...(status === 'DRAFT' ? { queuedAt: null } : {}),
+            }
           : {}),
       },
       include,

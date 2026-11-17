@@ -40,10 +40,36 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => (v === 'true' ? 1 : false)),
+
+  /**
+   * WAHA (WhatsApp HTTP API, gratuito e open source) para o envio automático
+   * ao grupo. Na VPS ele roda ao lado do app (http://waha:3000); no computador,
+   * `docker compose up -d waha`. Vazio desliga o envio automático: as
+   * mensagens continuam saindo à mão pelo painel.
+   */
+  WAHA_URL: z
+    .string()
+    .trim()
+    .default('')
+    .transform((v) => v.replace(/\/+$/, ''))
+    .refine((v) => v === '' || /^https?:\/\/[^\s]+$/.test(v), 'WAHA_URL precisa começar com http:// ou https://'),
+  /** A mesma chave do WAHA_API_KEY do container do WAHA. */
+  WAHA_API_KEY: z.string().trim().default(''),
+  /** Nome da sessão (um número de WhatsApp) dentro do WAHA. */
+  WAHA_SESSION: z
+    .string()
+    .trim()
+    .regex(/^[\w-]{1,60}$/, 'WAHA_SESSION: só letras, números, _ e -')
+    .default('default'),
 })
 
 function load() {
-  const parsed = envSchema.safeParse(process.env)
+  const env = envSchema.superRefine((v, ctx) => {
+    if (v.WAHA_URL && !v.WAHA_API_KEY) {
+      ctx.addIssue({ code: 'custom', path: ['WAHA_API_KEY'], message: 'com WAHA_URL definido, a chave do WAHA é obrigatória' })
+    }
+  })
+  const parsed = env.safeParse(process.env)
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
     throw new Error(`Configuração inválida no .env:\n${issues}`)

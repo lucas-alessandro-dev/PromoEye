@@ -137,7 +137,9 @@ export function messageDTO(
     body: m.body,
     status: m.status,
     error: m.error,
+    attempts: m.attempts,
     createdAt: m.createdAt.toISOString(),
+    queuedAt: iso(m.queuedAt),
     sentAt: iso(m.sentAt),
   }
 }

@@ -19,6 +19,13 @@
   --pe-r: 14px;
 }
 
+/* Âncoras (#ofertas, #lojas) e o foco do Tab não ficam atrás da navegação fixa: o kit zera
+   o scroll-padding. Com a barra de compra do celular aparecendo, o mesmo vale embaixo. */
+html { scroll-padding-top: calc(var(--nav, 72px) + 16px); }
+html.has-buybar { scroll-padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+/* Toque: sem a espera do duplo toque; o realce do toque é um laranja leve, de propósito. */
+a, button, summary, select, input, label, [role="tab"] { touch-action: manipulation; -webkit-tap-highlight-color: rgb(233 86 3 / .15); }
+
 /* ── Selos (os mesmos textos do painel e da mensagem do WhatsApp) ─────────────────────────── */
 .pe-chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 99px;
   font: 500 13px/1 var(--font-text); white-space: nowrap; background: color-mix(in oklab, var(--ink) 6%, transparent); color: var(--ink); }
@@ -67,7 +74,7 @@
 
 .shop-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 440px); gap: 16px 32px; align-items: end; padding-bottom: 20px; }
 .shop-head h1 { margin: 0; font: var(--display-weight) clamp(28px, 2.4vw + 10px, 42px)/1.08 var(--font-display);
-  font-stretch: var(--display-stretch); letter-spacing: var(--display-tracking); }
+  font-stretch: var(--display-stretch); letter-spacing: var(--display-tracking); text-wrap: balance; }
 .shop-head p { margin: 8px 0 0; font-size: 15px; line-height: 1.5; color: var(--muted); }
 
 .shop-search { display: flex; height: 48px; border-radius: 999px; background: var(--pe-card); box-shadow: var(--pe-ring); }
@@ -80,7 +87,8 @@
 .shop-search button:hover { background: color-mix(in oklab, var(--p-action) 86%, var(--p-ink)); }
 
 .shop-list { padding-top: 16px; border-top: 1px solid var(--pe-line); }
-.shop-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; margin: -2px; min-width: 0; }
+/* overscroll contido: arrastar até a ponta não dispara o "voltar" do navegador */
+.shop-chips { display: flex; gap: 8px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding: 2px; margin: -2px; min-width: 0; }
 .shop-chips::-webkit-scrollbar { display: none; }
 .shop-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 14px 0 16px; }
 .fchip { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 999px; flex: none;
@@ -97,6 +105,7 @@
   font: 500 14px/1 var(--font-text); color: var(--ink); cursor: pointer; appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23111827' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 14px center; }
+.shop-sort select:hover { box-shadow: 0 0 0 1px rgb(17 24 39 / .22); }
 .shop-sort select:focus-visible { outline: 2px solid var(--p-action); outline-offset: 2px; }
 .shop-sort__apply { height: 40px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--p-ink); color: #fff; font: 500 14px/1 var(--font-text); cursor: pointer; }
 
@@ -187,12 +196,15 @@
 .pdp { display: grid; grid-template-columns: minmax(0, 7fr) minmax(340px, 5fr); gap: 32px; align-items: start; }
 .pdp > * { min-width: 0; }
 .pdp__gallery { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 24px; border-radius: 18px; background: var(--pe-card); box-shadow: var(--pe-ring); }
-.pdp__stage { display: grid; place-items: center; aspect-ratio: 4 / 3; }
-.pdp__stage img { max-width: 100%; max-height: 100%; object-fit: contain; mix-blend-mode: multiply; }
-.pdp__stage .pc__noimg { width: 60%; height: 60%; }
+/* O quadro reserva o espaço (sem salto de layout). A foto fica no tamanho natural e só encolhe
+   para caber: os width/height do HTML não podem ampliar a foto pequena de uma loja (ficaria borrada). */
+.pdp__stage { position: relative; aspect-ratio: 4 / 3; }
+.pdp__stage img { position: absolute; inset: 0; margin: auto; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; mix-blend-mode: multiply; }
+.pdp__stage .pc__noimg { position: absolute; inset: 20%; width: auto; height: auto; }
 .pdp__thumbs { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px; }
 .pdp__thumb { flex: none; width: 68px; height: 68px; padding: 6px; border: 0; border-radius: 10px; background: #fff; box-shadow: var(--pe-ring); cursor: pointer; }
 .pdp__thumb img { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; }
+.pdp__thumb:hover:not([aria-pressed="true"]) { box-shadow: 0 0 0 1px rgb(17 24 39 / .28); }
 .pdp__thumb[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--p-action); }
 .pdp__thumb:focus-visible { outline: 2px solid var(--p-ink); outline-offset: 2px; }
 
@@ -214,7 +226,8 @@
 .buy__none { margin: 8px 0 0; font-size: 15px; line-height: 1.5; }
 .buy__actions { display: grid; gap: 12px; justify-items: center; margin-top: 20px; }
 .buy__actions .btn { width: 100%; min-height: 52px; justify-content: center; font-size: 16px; }
-.buy__alt { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; font: 500 15px/1.3 var(--font-text); color: var(--ink); text-underline-offset: 3px; }
+.buy__alt { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; font: 500 15px/1.3 var(--font-text); color: var(--ink); text-decoration: none; text-underline-offset: 3px; }
+.buy__alt:hover { text-decoration: underline; }
 .buy__stats-cap { margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--pe-line); font-size: 13px; color: var(--muted); }
 .buy__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 8px 0 0; }
 .buy__stats dt { font-size: 12px; line-height: 1.3; color: var(--muted); }
@@ -222,16 +235,16 @@
 .buy__soon { font-weight: 400; color: var(--muted); }
 .buy__note { margin: 16px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
 
-.pdp-sec { margin-top: 64px; scroll-margin-top: calc(var(--nav, 72px) + 16px); }
+.pdp-sec { margin-top: 64px; }
 .pdp-sec__head { margin-bottom: 20px; }
-.pdp-sec__head h2 { margin: 0; font: var(--display-weight) clamp(22px, 1.2vw + 14px, 32px)/1.15 var(--font-display); font-stretch: var(--display-stretch); letter-spacing: -0.02em; }
+.pdp-sec__head h2 { margin: 0; font: var(--display-weight) clamp(22px, 1.2vw + 14px, 32px)/1.15 var(--font-display); font-stretch: var(--display-stretch); letter-spacing: -0.02em; text-wrap: balance; }
 .pdp-sec__head p { margin: 6px 0 0; max-width: 72ch; font-size: 15px; line-height: 1.5; color: var(--muted); }
 .pdp-sec__head--split { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
 
 /* ── 404 ── */
 .nf { display: grid; justify-items: start; gap: 12px; max-width: 640px; padding: 32px; border-radius: 18px; background: var(--pe-card); box-shadow: var(--pe-ring); }
 .nf__code { margin: 0; font: 600 14px/1 var(--font-text); letter-spacing: .08em; color: var(--p-action); }
-.nf h1 { margin: 0; font: var(--display-weight) clamp(26px, 2vw + 14px, 40px)/1.12 var(--font-display); font-stretch: var(--display-stretch); letter-spacing: -0.02em; }
+.nf h1 { margin: 0; font: var(--display-weight) clamp(26px, 2vw + 14px, 40px)/1.12 var(--font-display); font-stretch: var(--display-stretch); letter-spacing: -0.02em; text-wrap: balance; }
 .nf p { margin: 0 0 8px; font-size: 16px; line-height: 1.55; color: var(--muted); max-width: 52ch; }
 @media (max-width: 639px) { .nf { padding: 22px; } .nf .btn { width: 100%; justify-content: center; min-height: 48px; } }
 
@@ -253,7 +266,7 @@
 .st__range { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .st__price { grid-area: price; display: grid; justify-items: end; text-align: right; }
 .st__price s { font-size: 13px; color: var(--muted); }
-.st__price b { font: 500 22px/1.2 var(--font-text); letter-spacing: -0.01em; white-space: nowrap; }
+.st__price b { font: 500 22px/1.2 var(--font-text); letter-spacing: -0.01em; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .st__price small { font-size: 13px; color: var(--muted); }
 .st__go { grid-area: go; }
 .st:not(.st--best) .st__go { background: color-mix(in oklab, var(--ink) 7%, #fff); color: var(--ink); }
@@ -261,13 +274,14 @@
 .st__title { grid-area: more; margin: 0; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st__more { grid-area: more; }
 .st__more summary { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; list-style: none; font: 500 14px/1 var(--font-text); color: var(--ink); }
+.st__more summary:hover { text-decoration: underline; text-underline-offset: 3px; }
 .st__more summary::-webkit-details-marker { display: none; }
 .st__more summary::after { content: ""; width: 7px; height: 7px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform .2s ease; }
 .st__more[open] summary::after { transform: translateY(2px) rotate(-135deg); }
 .st__more summary:focus-visible { outline: 2px solid var(--p-action); outline-offset: 2px; border-radius: 4px; }
 .st__more .pe-offers { margin-top: 6px; border-top: 1px solid var(--pe-line); }
 
-.stores__subhead { margin: 32px 0 12px; font: 500 17px/1.3 var(--font-text); letter-spacing: 0; }
+.stores__subhead { margin: 32px 0 12px; font: 500 17px/1.3 var(--font-text); letter-spacing: 0; text-wrap: balance; }
 .stores-off { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
 .so { display: grid; gap: 3px; padding: 12px 14px; border-radius: 12px; background: color-mix(in oklab, var(--ink) 4%, transparent); }
 .so__name { font: 500 15px/1.3 var(--font-text); }
@@ -320,6 +334,7 @@
 .hc-empty p + p { margin-top: 6px; color: var(--muted); font-size: 15px; }
 .hc-table { margin-top: 14px; }
 .hc-table summary { display: inline-flex; min-height: 44px; align-items: center; cursor: pointer; font: 500 14px/1 var(--font-text); text-decoration: underline; text-underline-offset: 3px; }
+.hc-table summary:hover { text-decoration-thickness: 2px; }
 .hc-table summary:focus-visible { outline: 2px solid var(--p-action); outline-offset: 2px; border-radius: 4px; }
 .hc-table table { width: 100%; margin-top: 10px; border-collapse: collapse; border-radius: 12px; overflow: hidden; background: var(--pe-card); box-shadow: var(--pe-ring); font-size: 14px; }
 .hc-table th, .hc-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--pe-line); }
@@ -336,12 +351,12 @@
   .pdp { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .pdp__stage { aspect-ratio: 4 / 3; }
   /* no celular as miniaturas rolam de lado, numa linha só */
-  .pdp__thumbs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .pdp__thumbs { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
   .pdp__thumbs::-webkit-scrollbar { display: none; }
 }
 /* Barra de compra presa embaixo (só celular; shop.js liga e desliga) */
 .buybar { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: #fff; box-shadow: 0 -1px 0 var(--pe-line), 0 -12px 28px -16px rgb(17 24 39 / .3);
+  padding: 10px max(16px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: #fff; box-shadow: 0 -1px 0 var(--pe-line), 0 -12px 28px -16px rgb(17 24 39 / .3);
   transform: translateY(110%); visibility: hidden; transition: transform .25s ease, visibility 0s linear .25s; }
 .buybar.is-on { transform: none; visibility: visible; transition: transform .25s ease, visibility 0s; }
 .buybar__info { display: grid; min-width: 0; flex: 1; }
@@ -351,7 +366,11 @@
 @media (min-width: 768px) { .buybar { display: none; } }
 /* "display" de classe venceria o atributo hidden: sem JavaScript, estes ficam escondidos */
 .buybar[hidden], .pdp__thumbs[hidden] { display: none; }
-@media (prefers-reduced-motion: reduce) { .buybar, .buybar.is-on { transition: none; } }
+/* Movimento reduzido: nada sobe, cresce ou desliza; as mudanças de estado ficam instantâneas. */
+@media (prefers-reduced-motion: reduce) {
+  .pc__link, .pc__media img, .pe-go, .st__go, .fchip, .shop-search button, .st__more summary::after, .buybar, .buybar.is-on { transition: none; }
+  .pc__link:hover, .pc__link:hover .pc__media img, .pe-go:hover, .pe-go:active, .st__go:hover, .st__go:active { transform: none; }
+}
 
 @media (max-width: 767px) {
   /* loja: nome em cima; preço e botão na mesma linha; o mini-gráfico embaixo */
@@ -386,7 +405,7 @@
   .buy__stats dd { font-size: 15px; }
   .stores-off { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .so { padding: 10px 12px; }
-  .pgrid--row { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 46%; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+  .pgrid--row { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 46%; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; padding-bottom: 4px; }
   .pgrid--row > .pc { scroll-snap-align: start; }
 }
 

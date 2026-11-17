@@ -1,6 +1,6 @@
 # PromoEye
 
-Confere de hora em hora o preço dos itens que você escolhe, em lojas confiáveis, e separa promoção de verdade do "metade do dobro" da Black Friday. Vitrine pública com link de afiliado, painel para administrar e fila de mensagens para um grupo de WhatsApp.
+Confere de hora em hora o preço dos itens que você escolhe, em lojas confiáveis, e separa promoção de verdade do "metade do dobro" da Black Friday. Vitrine pública com link de afiliado, painel para administrar e envio automático das promoções para um grupo de WhatsApp.
 
 - **Vitrine**: `/`, uma listagem no jeito das grandes lojas (busca, categorias, "só promoções", ordenação, um cartão por item com o menor preço). Cada cartão abre `/ofertas/<slug>`: fotos, caixa de compra, **todas as lojas pesquisadas** com a situação de cada uma (preço, esgotado, não encontrado, não respondeu, manual) e o **histórico** do menor preço em 7, 30 ou 90 dias.
 - **Painel**: `/painel`, para itens, ofertas, lojas, afiliados, WhatsApp e configurações.
@@ -25,7 +25,7 @@ Outros comandos:
 |---|---|
 | `npm run collect` | uma coleta pelo terminal (`-- <slug>` para um item só) |
 | `npm run probe -- "air fryer"` | testa a busca em cada loja, sem gravar nada |
-| `npm test` | testes (filtro, pontuação, afiliado, parsers das lojas, contrato da API) |
+| `npm test` | testes (filtro, pontuação, afiliado, parsers das lojas, contrato da API, fila do WhatsApp) |
 | `npm run build` | compila shared, painel e servidor |
 | `node scripts/shoot.mjs <url> <pasta> 1440x900,390x844 --tiles` | capturas da vitrine em Chrome headless |
 
@@ -81,9 +81,19 @@ Nos primeiros dias o histórico é curto (selo "Acompanhando há pouco tempo"), 
 
 ## WhatsApp
 
-Hoje: quando um item ganha uma promoção nova, mais barata que a última avisada, o PromoEye deixa uma mensagem pronta em **Painel → WhatsApp**. Cada item gera no máximo uma mensagem, para a mesma promoção não chegar em cinco cores. Dali você copia e cola no grupo, ou abre direto no WhatsApp, e depois marca como enviada. O convite do grupo (Configurações) vira um botão na vitrine.
+Quando um item ganha uma promoção nova, mais barata que a última avisada, o PromoEye monta a mensagem. Cada item gera no máximo uma, para a mesma promoção não chegar em cinco cores. O convite do grupo (Configurações) vira um botão na vitrine.
 
-Próxima etapa: um provedor consome a mesma fila (`OutboundMessage`, status `DRAFT`). A API oficial da Meta (Cloud API) não envia para grupos comuns. Evolution API e Z-API enviam, mas usam um número comum de WhatsApp, que pode ser bloqueado se mandar demais. Os campos do provedor já existem em Configurações.
+**Envio automático** (Painel → WhatsApp): o PromoEye manda sozinho para o grupo, com a foto do produto e o texto na legenda, pelo [WAHA](https://waha.devlike.pro). O WAHA é gratuito e open source desde a versão 2026.6 e roda como mais um container na VPS (motor GOWS, sem navegador). Conecte o número com o QR code ou com código de pareamento, escolha o grupo na lista e ligue "Enviar sozinho".
+
+- A fila (`OutboundMessage`, status `QUEUED`) manda uma por vez, com pelo menos 1 min de intervalo, até um limite por hora (padrão 10). No horário de silêncio (padrão 22h–8h) nada sai.
+- Antes de cada envio ele confere se a mensagem ainda é verdade. Se o preço subiu, se esgotou, se o anúncio sumiu ou se já existe uma mais nova do mesmo item, a mensagem é descartada com o motivo.
+- Sem resposta do WAHA, tenta de novo até 3 vezes. Se o pedido esgotar o tempo, não reenvia: a mensagem pode ter saído e repetir no grupo é pior.
+- Com o WhatsApp desconectado, o Painel avisa e a fila espera até 12 h.
+- Sem o envio automático, as mensagens ficam como rascunho para copiar e colar, abrir no WhatsApp ou mandar com "Enviar agora".
+
+Por que o WAHA: a API oficial da Meta (Cloud API) cobra por mensagem e não serve para grupo comum de promoções. Z-API é paga. O Evolution API também é grátis, mas pede Postgres e Redis próprios. Todos os não oficiais usam um número comum de WhatsApp, que pode ser bloqueado se mandar demais. Por isso o limite por hora, o intervalo e a recomendação de usar um chip só para o grupo.
+
+No computador: `docker compose up -d waha`, depois `WAHA_URL=http://localhost:3100` e uma `WAHA_API_KEY` no `.env` (modelo em `.env.example`).
 
 ## Produção
 
@@ -109,6 +119,7 @@ Para testar a imagem de produção no seu computador: `docker compose --profile 
 ```
 apps/server     Fastify: vitrine (Nunjucks), API do painel, /ir, coletor e agendador
   src/collector   adaptadores das lojas, filtro (matcher), pontuação (scoring), coleta (run)
+  src/services/whatsapp  cliente do WAHA e fila de envio automático
 apps/admin      painel React (Vite), servido em /painel
 packages/shared contrato da API (zod), selos, formatação, catálogo de lojas, mensagem do WhatsApp
 prisma          schema e migrações

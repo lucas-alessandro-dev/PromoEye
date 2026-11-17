@@ -2,17 +2,18 @@
 
 {% macro chip(flag) %}<span class="pe-chip pe-chip--{{ flag.tone }}" title="{{ flag.id | flagHint }}">{{ flag.id | flagLabel }}</span>{% endmacro %}
 
-{% macro thumb(url, cls='') %}{% if url %}<img class="pe-thumb {{ cls }}" src="{{ url }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="pe-thumb pe-thumb--empty {{ cls }}" aria-hidden="true"></span>{% endif %}{% endmacro %}
+{% macro thumb(url, cls='') %}{% if url %}<img class="pe-thumb {{ cls }}" src="{{ url }}" alt="" width="56" height="56" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% else %}<span class="pe-thumb pe-thumb--empty {{ cls }}" aria-hidden="true"></span>{% endif %}{% endmacro %}
 
 {# Preço grande no jeito das lojas: "R$ 3.220" com os centavos em sobrescrito. #}
 {% macro bigPrice(value, cls) %}{% set pp = value | priceParts %}<span class="{{ cls }}"><span class="sr-only">{{ value | brl }}</span><span aria-hidden="true"><span class="{{ cls }}-cur">R$</span>{{ pp.int }}<sup>{{ pp.cents }}</sup></span></span>{% endmacro %}
 
-{# Um item na listagem. O cartão inteiro leva à página do item; a loja fica a um clique de lá. #}
-{% macro productCard(c) %}
+{# Um item na listagem. O cartão inteiro leva à página do item; a loja fica a um clique de lá.
+   index: posição na grade. Os primeiros aparecem sem rolar: foto sem lazy, e as 2 primeiras com prioridade. #}
+{% macro productCard(c, index=99) %}
 <li class="pc{% if not c.best %} pc--empty{% endif %}">
   <a class="pc__link" href="{{ c.href }}">
     <span class="pc__media">
-      {% if c.imageUrl %}<img src="{{ c.imageUrl }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% else %}<span class="pc__noimg" aria-hidden="true"></span>{% endif %}
+      {% if c.imageUrl %}<img src="{{ c.imageUrl }}" alt="" width="400" height="400" {% if index <= 4 %}loading="eager"{% if index <= 2 %} fetchpriority="high"{% endif %}{% else %}loading="lazy"{% endif %} decoding="async" referrerpolicy="no-referrer">{% else %}<span class="pc__noimg" aria-hidden="true"></span>{% endif %}
       {% if c.isDeal %}<span class="pc__tag">Promoção de verdade</span>{% endif %}
     </span>
     <span class="pc__body">

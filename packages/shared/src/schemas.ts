@@ -248,14 +248,20 @@ export interface DashboardDTO {
     offers: number
     deals: number
     draftMessages: number
+    queuedMessages: number
     clicks7d: number
   }
   topDeals: OfferDTO[]
   stores: StoreDTO[]
   blackFriday: { date: string; days: number }
+  /** Só com o envio automático ligado: o painel avisa se o WhatsApp caiu. */
+  whatsapp: { autoSend: boolean; state: WhatsAppState | null }
 }
 
 // ── WhatsApp ────────────────────────────────────────────────────────────────
+
+export const MESSAGE_STATUSES = ['DRAFT', 'QUEUED', 'SENDING', 'SENT', 'DISCARDED', 'FAILED'] as const
+export type MessageStatus = (typeof MESSAGE_STATUSES)[number]
 
 export interface MessageDTO {
   id: string
@@ -267,17 +273,89 @@ export interface MessageDTO {
   price: number | null
   reason: string | null
   body: string
-  status: 'DRAFT' | 'SENT' | 'DISCARDED' | 'FAILED'
+  status: MessageStatus
   error: string | null
+  attempts: number
   createdAt: string
+  queuedAt: string | null
   sentAt: string | null
 }
 
+/** QUEUED põe na fila do envio automático; DRAFT tira de lá. */
 export const messageUpdateInput = z.object({
-  status: z.enum(['DRAFT', 'SENT', 'DISCARDED']).optional(),
+  status: z.enum(['DRAFT', 'QUEUED', 'SENT', 'DISCARDED']).optional(),
   body: z.string().trim().min(1).max(4000).optional(),
 })
 export type MessageUpdateInput = z.infer<typeof messageUpdateInput>
+
+/**
+ * Estado da conexão com o WhatsApp, visto pelo WAHA:
+ * - UNCONFIGURED: o servidor não tem WAHA_URL/WAHA_API_KEY;
+ * - UNREACHABLE: tem, mas o WAHA não respondeu (ou recusou a chave);
+ * - NO_SESSION: o WAHA está no ar, mas nenhum número foi conectado ainda;
+ * - os demais são os do próprio WAHA (WORKING = conectado e pronto).
+ */
+export type WhatsAppState =
+  | 'UNCONFIGURED'
+  | 'UNREACHABLE'
+  | 'NO_SESSION'
+  | 'STOPPED'
+  | 'STARTING'
+  | 'SCAN_QR_CODE'
+  | 'WORKING'
+  | 'FAILED'
+
+const hour = z.coerce.number().int().min(0).max(23)
+
+/** Envio automático. Fica numa chave própria, fora das Configurações gerais. */
+export const senderSettingsInput = z.object({
+  /** Promoção nova vai direto para a fila, sem esperar você revisar. */
+  autoSend: z.boolean(),
+  /** Id do grupo no WhatsApp (120363…@g.us), escolhido na lista. */
+  groupId: z
+    .string()
+    .trim()
+    .max(120)
+    .refine((v) => v === '' || /^[\w.-]+@g\.us$/.test(v), 'Escolha um grupo da lista'),
+  groupName: z.string().trim().max(200),
+  /** Manda a foto do produto com o texto na legenda. Sem foto, vai só o texto. */
+  withImage: z.boolean(),
+  /** Teto de mensagens por hora (contando as que você marcou como enviadas). */
+  maxPerHour: z.coerce.number().int().min(1, 'Use de 1 a 30').max(30, 'Use de 1 a 30'),
+  /** Sem envio entre quietStart e quietEnd (horário de Brasília); a fila espera. */
+  quietHours: z.boolean(),
+  quietStart: hour,
+  quietEnd: hour,
+})
+export type SenderSettings = z.infer<typeof senderSettingsInput>
+
+export interface WhatsAppStatusDTO {
+  state: WhatsAppState
+  /** Número conectado, só dígitos com DDI (5511912345678). */
+  phone: string | null
+  pushName: string | null
+  error: string | null
+  settings: SenderSettings
+  queue: { queued: number; failed: number; sentLastHour: number }
+  /** Agora é horário de silêncio: a fila não anda. */
+  quietNow: boolean
+  /** Conectado e com grupo escolhido: dá para enviar. */
+  ready: boolean
+}
+
+export interface WhatsAppGroupDTO {
+  id: string
+  name: string
+}
+
+export const pairInput = z.object({
+  phone: z
+    .string()
+    .transform((v) => v.replace(/\D/g, ''))
+    .refine((v) => v.length >= 12 && v.length <= 15, 'Use o número com DDI e DDD, como 55 11 91234-5678'),
+})
+
+export const testSendInput = z.object({ target: z.enum(['me', 'group']) })
 
 // ── Configurações ───────────────────────────────────────────────────────────
 
@@ -302,17 +380,15 @@ export const settingsInput = z.object({
       .max(300)
       .transform((v) => v || '')
       .refine((v) => v === '' || /^https:\/\/chat\.whatsapp\.com\//.test(v), 'Use um convite https://chat.whatsapp.com/...'),
-    /** Gera rascunho de mensagem quando surge promoção nova. */
+    /**
+     * Gera a mensagem quando surge promoção nova. O envio automático (página
+     * WhatsApp) depende disto: desligado, nada é gerado e nada sai.
+     */
     autoDraft: z.boolean(),
-    /** Provedor de envio automático — reservado para a próxima etapa. */
-    provider: z.enum(['none', 'evolution', 'zapi', 'cloud']),
-    providerUrl: z.string().trim().max(300),
-    providerInstance: z.string().trim().max(120),
-    groupId: z.string().trim().max(120),
   }),
 })
 export type SettingsInput = z.infer<typeof settingsInput>
-export type SettingsDTO = SettingsInput & { providerTokenSet: boolean }
+export type SettingsDTO = SettingsInput
 
 // ── Login ───────────────────────────────────────────────────────────────────
 

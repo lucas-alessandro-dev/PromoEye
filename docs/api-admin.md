@@ -66,11 +66,27 @@ A coleta leva de 30 s a 2 min. Depois do POST, consulte `GET /api/admin/runs/:id
 
 | Método | Rota | Corpo | Resposta |
 |---|---|---|---|
-| GET | `/api/admin/messages?status=DRAFT` | — | `MessageDTO[]` (sem `status` = todas, mais novas primeiro, até 200) |
-| PATCH | `/api/admin/messages/:id` | `MessageUpdateInput` | `MessageDTO` |
+| GET | `/api/admin/messages?status=DRAFT` | — | `MessageDTO[]` (sem `status` = todas, mais novas primeiro, até 200; `QUEUED` vem na ordem de saída) |
+| PATCH | `/api/admin/messages/:id` | `MessageUpdateInput` | `MessageDTO` (`QUEUED` põe na fila e zera tentativas; `DRAFT` tira; 409 se estiver `SENDING`) |
+| POST | `/api/admin/messages/:id/send` | — | `MessageDTO`. Manda na hora pelo WAHA, sem esperar fila nem horário de silêncio. Em falha: 502 `{ error, message: MessageDTO }` |
 
-Hoje o envio é manual: copiar o texto, ou abrir `https://wa.me/?text=<texto codificado>` (o WhatsApp pede para escolher o grupo), e marcar como `SENT`.
-O campo `whatsapp.provider` das configurações fica reservado para o envio automático (Evolution API, Z-API ou Cloud API).
+Status: `DRAFT` (rascunho) → `QUEUED` (fila do envio automático) → `SENDING` → `SENT`, ou `DISCARDED` / `FAILED` com o motivo em `error`.
+O envio manual continua: copiar o texto, ou abrir `https://wa.me/?text=<texto codificado>`, e marcar como `SENT`.
+
+### Envio automático (WAHA)
+
+| Método | Rota | Corpo | Resposta |
+|---|---|---|---|
+| GET | `/api/admin/whatsapp/status` | — | `WhatsAppStatusDTO` (estado da conexão, número, regras, números da fila) |
+| POST | `/api/admin/whatsapp/connect` | — | `WhatsAppStatusDTO`. Cria/inicia a sessão no WAHA; o estado vira `SCAN_QR_CODE` |
+| GET | `/api/admin/whatsapp/qr` | — | `{ image: string }` (data URL). 409 fora de `SCAN_QR_CODE` |
+| POST | `/api/admin/whatsapp/pair` | `{ phone: string }` | `{ code: string }` (conectar com número de telefone) |
+| POST | `/api/admin/whatsapp/logout` | — | `WhatsAppStatusDTO` |
+| GET | `/api/admin/whatsapp/groups` | — | `WhatsAppGroupDTO[]` (grupos do número conectado) |
+| PUT | `/api/admin/whatsapp/settings` | `SenderSettings` | `WhatsAppStatusDTO`. `autoSend` exige `groupId`; ligar `autoSend` liga `whatsapp.autoDraft` |
+| POST | `/api/admin/whatsapp/test` | `{ target: 'me' \| 'group' }` | `{ ok: true }` |
+
+Erros do WAHA voltam como 502 com a explicação em `error`; sem `WAHA_URL`/`WAHA_API_KEY` no servidor, 409.
 
 ## Configurações
 

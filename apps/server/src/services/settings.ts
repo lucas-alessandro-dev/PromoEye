@@ -1,11 +1,14 @@
 import {
   DEFAULT_EXCLUDES,
   DEFAULT_TRUSTED_SELLERS,
+  senderSettingsInput,
   settingsInput,
+  type SenderSettings,
   type SettingsDTO,
   type SettingsInput,
 } from '@promoeye/shared'
 import { prisma } from '../lib/prisma.js'
+import { wahaConfigured } from './whatsapp/waha.js'
 
 export const DEFAULT_SETTINGS: SettingsInput = {
   siteTitle: 'PromoEye',
@@ -20,21 +23,34 @@ export const DEFAULT_SETTINGS: SettingsInput = {
   whatsapp: {
     groupInviteUrl: '',
     autoDraft: true,
-    provider: 'none',
-    providerUrl: '',
-    providerInstance: '',
-    groupId: '',
   },
 }
 
+/**
+ * Envio automático: começa desligado. Limite de 10 por hora e silêncio das 22h
+ * às 8h — grupo de promoção que apita de madrugada perde gente.
+ */
+export const DEFAULT_SENDER: SenderSettings = {
+  autoSend: false,
+  groupId: '',
+  groupName: '',
+  withImage: true,
+  maxPerHour: 10,
+  quietHours: true,
+  quietStart: 22,
+  quietEnd: 8,
+}
+
 const KEY = 'app'
-const TOKEN_KEY = 'whatsapp.providerToken'
+const SENDER_KEY = 'whatsapp.sender'
+const TTL = 10_000
 
 let cache: { value: SettingsInput; at: number } | null = null
+let senderCache: { value: SenderSettings; at: number } | null = null
 
 /** Configurações com os padrões por baixo — campo novo nunca chega undefined. */
 export async function getSettings(): Promise<SettingsInput> {
-  if (cache && Date.now() - cache.at < 10_000) return cache.value
+  if (cache && Date.now() - cache.at < TTL) return cache.value
   const row = await prisma.setting.findUnique({ where: { key: KEY } })
   const stored = (row?.value ?? {}) as Partial<SettingsInput>
   const merged = {
@@ -49,8 +65,7 @@ export async function getSettings(): Promise<SettingsInput> {
 }
 
 export async function getSettingsDTO(): Promise<SettingsDTO> {
-  const [value, token] = await Promise.all([getSettings(), prisma.setting.findUnique({ where: { key: TOKEN_KEY } })])
-  return { ...value, providerTokenSet: Boolean(token) }
+  return getSettings()
 }
 
 export async function saveSettings(input: SettingsInput): Promise<SettingsDTO> {
@@ -61,4 +76,36 @@ export async function saveSettings(input: SettingsInput): Promise<SettingsDTO> {
   })
   cache = null
   return getSettingsDTO()
+}
+
+export async function getSenderSettings(): Promise<SenderSettings> {
+  if (senderCache && Date.now() - senderCache.at < TTL) return senderCache.value
+  const row = await prisma.setting.findUnique({ where: { key: SENDER_KEY } })
+  const parsed = senderSettingsInput.safeParse({ ...DEFAULT_SENDER, ...((row?.value ?? {}) as object) })
+  const value = parsed.success ? parsed.data : DEFAULT_SENDER
+  senderCache = { value, at: Date.now() }
+  return value
+}
+
+export async function saveSenderSettings(input: SenderSettings): Promise<SenderSettings> {
+  await prisma.setting.upsert({
+    where: { key: SENDER_KEY },
+    create: { key: SENDER_KEY, value: input as object },
+    update: { value: input as object },
+  })
+  senderCache = null
+  // Ligar o envio automático liga também a geração das mensagens: sem ela
+  // não haveria o que enviar, e o motivo ficaria escondido em outra página.
+  if (input.autoSend) {
+    const app = await getSettings()
+    if (!app.whatsapp.autoDraft) await saveSettings({ ...app, whatsapp: { ...app.whatsapp, autoDraft: true } })
+  }
+  return getSenderSettings()
+}
+
+/** Promoção nova vai direto para a fila? Só com WAHA configurado, envio ligado e grupo escolhido. */
+export async function autoQueueEnabled(): Promise<boolean> {
+  if (!wahaConfigured()) return false
+  const s = await getSenderSettings()
+  return s.autoSend && s.groupId !== ''
 }

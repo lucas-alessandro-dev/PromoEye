@@ -24,5 +24,6 @@ COLLECT_CRON="5 * * * *"
 COLLECT_ENABLED=true
 COLLECT_STORE_DELAY_MS=1500
 COLLECT_TIMEOUT_MS=15000
+WAHA_API_KEY=$(openssl rand -hex 32)
 EOF
 echo "Criado $(pwd)/.env"

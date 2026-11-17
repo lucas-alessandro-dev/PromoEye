@@ -2,10 +2,34 @@
 // (a ordem tem botão "Aplicar", a galeria mostra a primeira foto e o
 // histórico tem a tabela). Textos vindos do banco entram por textContent.
 
-// Ordenar: aplica ao escolher, sem precisar do botão.
+// Ordenar: com mouse ou toque, aplica ao escolher. No teclado as setas trocam a
+// opção sem abrir a lista; aplicar a cada seta recarregaria a página na primeira
+// tecla, então ali só vale Enter ou sair do campo.
 for (const select of document.querySelectorAll('select[data-autosubmit]')) {
-  select.form?.querySelector('[data-apply]')?.setAttribute('hidden', '')
-  select.addEventListener('change', () => select.form?.requestSubmit())
+  const form = select.form
+  if (!form) continue
+  form.querySelector('[data-apply]')?.setAttribute('hidden', '')
+  const initial = select.value
+  let keyboard = false
+  const submit = () => {
+    if (select.value !== initial) form.requestSubmit()
+  }
+  select.addEventListener('pointerdown', () => {
+    keyboard = false
+  })
+  select.addEventListener('keydown', (event) => {
+    keyboard = true
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      submit()
+    }
+  })
+  select.addEventListener('change', () => {
+    if (!keyboard) submit()
+  })
+  select.addEventListener('blur', () => {
+    if (keyboard) submit()
+  })
 }
 
 // Galeria da página do item: as miniaturas trocam a foto grande.
@@ -23,6 +47,7 @@ if (mainImg && thumbs) {
 
 // Celular: barra de compra presa embaixo enquanto a caixa de compra está fora
 // da tela. Some quando a caixa aparece e quando o rodapé chega (não cobre nada lá).
+// Enquanto aparece, html.has-buybar reserva espaço embaixo para o foco do Tab.
 const buybar = document.querySelector('[data-buybar]')
 const buyActions = document.querySelector('.buy__actions')
 if (buybar && buyActions && 'IntersectionObserver' in window) {
@@ -33,6 +58,7 @@ if (buybar && buyActions && 'IntersectionObserver' in window) {
     const show = phone.matches && !visible.get(buyActions) && !visible.get(footer)
     buybar.classList.toggle('is-on', show)
     buybar.toggleAttribute('inert', !show)
+    document.documentElement.classList.toggle('has-buybar', show)
   }
   const io = new IntersectionObserver((entries) => {
     for (const e of entries) visible.set(e.target, e.isIntersecting)
@@ -48,6 +74,7 @@ if (buybar && buyActions && 'IntersectionObserver' in window) {
 // instante é o da última mudança antes dele.
 const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 const when = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+const live = document.querySelector('[data-hc-live]')
 
 for (const plot of document.querySelectorAll('[data-points]')) {
   let points
@@ -58,34 +85,45 @@ for (const plot of document.querySelectorAll('[data-points]')) {
   }
   if (!points.length) continue
   const cursor = plot.querySelector('.hc__cursor')
-  const value = cursor.querySelector('.hc__tip b')
-  const detail = cursor.querySelector('.hc__tip span')
+  const tip = cursor.querySelector('.hc__tip')
+  const value = tip.querySelector('b')
+  const detail = tip.querySelector('span')
   let index = points.length - 1
+  let currentX = 100
+  let frame = 0
 
   const stepAt = (xPct) => {
     let i = 0
     for (let k = 0; k < points.length; k++) if (points[k].x <= xPct) i = k
     return i
   }
-  const show = (i, xPct) => {
-    index = i
-    const p = points[i]
-    const x = xPct ?? p.x
-    cursor.hidden = false
-    cursor.style.setProperty('--x', `${x}%`)
-    cursor.style.setProperty('--y', `${p.y}%`)
-    value.textContent = money.format(p.v)
-    detail.textContent = `${p.s ? `${p.s} · ` : ''}desde ${when.format(new Date(p.t))}`
-    // O balão fica à direita do cursor; se não couber, à esquerda; e nunca sai da
-    // tela (no celular estreito, perto do meio, ele não cabe inteiro em nenhum lado).
+  const describe = (p) => `${money.format(p.v)}${p.s ? `, ${p.s}` : ''}, desde ${when.format(new Date(p.t))}`
+
+  // O balão fica à direita do cursor; se não couber, à esquerda; e nunca sai da
+  // tela. As medidas são lidas uma vez por quadro, depois de todas as escritas
+  // (ler no meio do movimento forçaria o navegador a refazer o layout).
+  const place = () => {
+    frame = 0
     const rect = plot.getBoundingClientRect()
-    const tipWidth = cursor.querySelector('.hc__tip').offsetWidth
+    const tipWidth = tip.offsetWidth
     const screen = document.documentElement.clientWidth
-    const xPx = rect.left + (rect.width * x) / 100
+    const xPx = rect.left + (rect.width * currentX) / 100
     let left = xPx + 12
     if (left + tipWidth > screen - 8) left = xPx - 12 - tipWidth
     left = Math.max(8, Math.min(left, screen - 8 - tipWidth))
     cursor.style.setProperty('--tip-dx', `${Math.round(left - xPx)}px`)
+  }
+  const show = (i, xPct, speak = false) => {
+    index = i
+    const p = points[i]
+    currentX = xPct ?? p.x
+    cursor.hidden = false
+    cursor.style.setProperty('--x', `${currentX}%`)
+    cursor.style.setProperty('--y', `${p.y}%`)
+    value.textContent = money.format(p.v)
+    detail.textContent = `${p.s ? `${p.s} · ` : ''}desde ${when.format(new Date(p.t))}`
+    if (speak && live) live.textContent = describe(p)
+    if (!frame) frame = requestAnimationFrame(place)
   }
   const hide = () => {
     cursor.hidden = true
@@ -106,13 +144,20 @@ for (const plot of document.querySelectorAll('[data-points]')) {
   document.addEventListener('pointerdown', (event) => {
     if (!plot.contains(event.target)) hide()
   })
-  plot.addEventListener('focus', () => show(index))
+  // Teclado: setas andam de mudança em mudança, Home/End vão às pontas, Esc fecha.
+  // Cada passo é anunciado na região aria-live (o balão visual é aria-hidden).
+  plot.addEventListener('focus', () => show(index, undefined, true))
   plot.addEventListener('blur', hide)
   plot.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      hide()
+      return
+    }
     const moves = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity }
     if (!(event.key in moves)) return
     event.preventDefault()
     const step = moves[event.key]
-    show(Math.min(points.length - 1, Math.max(0, Number.isFinite(step) ? index + step : step < 0 ? 0 : points.length - 1)))
+    const next = Number.isFinite(step) ? index + step : step < 0 ? 0 : points.length - 1
+    show(Math.min(points.length - 1, Math.max(0, next)), undefined, true)
   })
 }

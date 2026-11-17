@@ -69,10 +69,10 @@ export async function offerRoutes(app: FastifyInstance) {
   })
 
   app.delete<{ Params: { id: string } }>('/offers/:id', async (request, reply) => {
-    // Rascunho de uma oferta que não existe mais não deve ir para o grupo.
-    // As mensagens já enviadas ficam (com offerId nulo) como histórico.
+    // Rascunho (ou mensagem na fila) de uma oferta que não existe mais não deve
+    // ir para o grupo. As já enviadas ficam (com offerId nulo) como histórico.
     await prisma.$transaction([
-      prisma.outboundMessage.deleteMany({ where: { offerId: request.params.id, status: 'DRAFT' } }),
+      prisma.outboundMessage.deleteMany({ where: { offerId: request.params.id, status: { in: ['DRAFT', 'QUEUED'] } } }),
       prisma.offer.deleteMany({ where: { id: request.params.id } }),
     ])
     return reply.code(204).send()
@@ -144,7 +144,7 @@ export async function offerRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>('/offers/:id/message', async (request, reply) => {
     const offer = await prisma.offer.findUnique({ where: { id: request.params.id }, include: { watchItem: true } })
     if (!offer) return reply.code(404).send({ error: 'Oferta não encontrada.' })
-    await draftForBestDeal(offer.watchItem, offer.id, true)
+    await draftForBestDeal(offer.watchItem, offer.id, { force: true })
     const msg = await prisma.outboundMessage.findFirst({
       where: { offerId: offer.id },
       orderBy: { createdAt: 'desc' },

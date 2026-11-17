@@ -14,6 +14,16 @@ import { outboundFor } from '../services/dto.js'
  * Só redireciona para https. Um id inexistente vai para a vitrine, nunca
  * para uma URL arbitrária: isto não é um redirecionador aberto.
  */
+// "bot/" e "bot-" (Googlebot/2.1, Slackbot-LinkExpanding) ou "bot" como palavra
+// solta — e não qualquer "bot", senão o celular Cubot ("CUBOT X30") deixaria de contar.
+const PREVIEW_BOTS =
+  /bot[/-]|\bbot\b|crawler|spider|preview|facebookexternalhit|whatsapp\/|telegram|slack|discord|skype|go-http-client|okhttp|node-fetch|undici|axios|python|curl\/|wget/i
+
+/** Robô de prévia de link ou cliente HTTP genérico (sem navegador). */
+export function isLinkPreviewBot(ua: string | undefined): boolean {
+  return !ua || PREVIEW_BOTS.test(ua)
+}
+
 export async function goRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string }; Querystring: { c?: string } }>(
     '/ir/:id',
@@ -33,7 +43,11 @@ export async function goRoutes(app: FastifyInstance) {
         referrer = null
       }
       const channel = request.query.c === 'wa' ? 'whatsapp' : 'site'
-      prisma.click.create({ data: { offerId: offer.id, referrer, channel } }).catch(() => undefined)
+      // A prévia do link (WhatsApp, WAHA, redes sociais) abre a URL sozinha;
+      // isso não é gente clicando.
+      if (!isLinkPreviewBot(request.headers['user-agent'])) {
+        prisma.click.create({ data: { offerId: offer.id, referrer, channel } }).catch(() => undefined)
+      }
 
       reply.header('Cache-Control', 'no-store')
       reply.header('Referrer-Policy', 'no-referrer-when-downgrade')

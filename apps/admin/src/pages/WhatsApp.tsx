@@ -1,27 +1,44 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { flagLabel, formatBRL, timeAgo, type MessageDTO } from '@promoeye/shared'
-import { api, errorMessage } from '../api'
+import { flagLabel, formatBRL, timeAgo, type MessageDTO, type MessageUpdateInput } from '@promoeye/shared'
+import { ApiError, api, errorMessage } from '../api'
 import { useRun } from '../context/run'
 import { useToast } from '../context/toast'
 import { useLoad, useTitle } from '../lib/hooks'
 import { copyText, formatTime, whatsappShareUrl } from '../lib/format'
 import { Badge, Thumb } from '../components/Deal'
-import { SelectField, TextArea, TextField } from '../components/Fields'
+import { TextArea } from '../components/Fields'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { WhatsAppBubble } from '../components/WhatsAppBubble'
+import { WhatsAppSender } from '../components/WhatsAppSender'
 
-type Tab = 'DRAFT' | 'SENT' | 'DISCARDED' | 'ALL'
+type Tab = 'DRAFT' | 'QUEUED' | 'SENT' | 'FAILED' | 'DISCARDED' | 'ALL'
 
 const TABS: [Tab, string][] = [
   ['DRAFT', 'Para enviar'],
+  ['QUEUED', 'Na fila'],
   ['SENT', 'Enviadas'],
+  ['FAILED', 'Com erro'],
   ['DISCARDED', 'Descartadas'],
   ['ALL', 'Todas'],
 ]
 
+const EMPTY: Record<Tab, [string, string]> = {
+  DRAFT: [
+    'Nenhuma mensagem para enviar',
+    'As mensagens aparecem sozinhas quando uma oferta vira promoção. Também dá para gerar uma em Ofertas › Gerar mensagem.',
+  ],
+  QUEUED: ['A fila está vazia', 'Com o envio automático ligado, cada promoção nova entra aqui e sai sozinha para o grupo.'],
+  SENT: ['Nada enviado ainda', 'Mude de aba para ver as outras mensagens.'],
+  FAILED: ['Nenhum erro', 'Mensagens que não saíram aparecem aqui, com o motivo.'],
+  DISCARDED: ['Nada descartado', 'Mude de aba para ver as outras mensagens.'],
+  ALL: ['Nada por aqui', 'As mensagens aparecem quando uma oferta vira promoção.'],
+}
+
 const STATUS_BADGE: Record<MessageDTO['status'], { label: string; tone: 'good' | 'warn' | 'danger' | 'info' | 'neutral' }> = {
   DRAFT: { label: 'rascunho', tone: 'info' },
+  QUEUED: { label: 'na fila', tone: 'warn' },
+  SENDING: { label: 'enviando', tone: 'warn' },
   SENT: { label: 'enviada', tone: 'good' },
   DISCARDED: { label: 'descartada', tone: 'neutral' },
   FAILED: { label: 'falhou', tone: 'danger' },
@@ -33,16 +50,21 @@ export function WhatsApp() {
   const [tab, setTab] = useState<Tab>('DRAFT')
   const list = useLoad(() => api.messages(tab === 'ALL' ? undefined : tab), [tab, version])
   const settings = useLoad(() => api.settings(), [])
+  const wa = useLoad(() => api.whatsappStatus(), [version])
 
-  const replace = (m: MessageDTO) =>
+  const replace = (m: MessageDTO) => {
     list.setData((rows) => {
       if (!rows) return rows
       // Mudou de status e saiu da aba atual: some da lista.
       if (tab !== 'ALL' && m.status !== tab) return rows.filter((r) => r.id !== m.id)
       return rows.map((r) => (r.id === m.id ? m : r))
     })
+    // Os números da fila no cartão de envio mudam junto.
+    api.whatsappStatus().then(wa.setData).catch(() => undefined)
+  }
 
   const invite = settings.data?.whatsapp.groupInviteUrl
+  const autoDraftOff = settings.data && !settings.data.whatsapp.autoDraft
 
   return (
     <div className="page">
@@ -50,11 +72,24 @@ export function WhatsApp() {
         <div>
           <h1>Mensagens para o grupo</h1>
           <p className="lead">
-            Quando surge promoção nova, o PromoEye deixa a mensagem pronta aqui. Por enquanto o envio é seu: copie e cole no
-            grupo, ou abra direto no WhatsApp.
+            Quando surge promoção nova, o PromoEye monta a mensagem. Com o envio automático ligado ela vai sozinha para o grupo;
+            sem ele, fica aqui para você revisar e mandar.
           </p>
         </div>
       </header>
+
+      {wa.loading && !wa.data && <Loading label="Conferindo o WhatsApp…" />}
+      {wa.error && !wa.data ? <ErrorBox error={wa.error} onRetry={wa.reload} title="Não deu para ver o envio automático" /> : null}
+      {wa.data && <WhatsAppSender status={wa.data} onStatus={wa.setData} onRetry={wa.reload} />}
+
+      {autoDraftOff && (
+        <div className="notice notice-warn">
+          <p>
+            A geração de mensagens está desligada em <Link to="/configuracoes">Configurações</Link>: nenhuma promoção nova vai
+            aparecer aqui nem sair para o grupo.
+          </p>
+        </div>
+      )}
 
       <div className="notice notice-info">
         {invite ? (
@@ -63,7 +98,7 @@ export function WhatsApp() {
           </p>
         ) : (
           <p>
-            Nenhum grupo cadastrado. Cole o convite do grupo em <Link to="/configuracoes">Configurações</Link> para ele aparecer
+            Nenhum convite cadastrado. Cole o convite do grupo em <Link to="/configuracoes">Configurações</Link> para ele aparecer
             na vitrine.
           </p>
         )}
@@ -79,34 +114,35 @@ export function WhatsApp() {
 
       {list.loading && !list.data && <Loading />}
       {list.error ? <ErrorBox error={list.error} onRetry={list.reload} /> : null}
-      {list.data && list.data.length === 0 && (
-        <Empty title={tab === 'DRAFT' ? 'Nenhuma mensagem para enviar' : 'Nada por aqui'}>
-          {tab === 'DRAFT'
-            ? 'As mensagens aparecem sozinhas quando uma oferta vira promoção. Também dá para gerar uma em Ofertas › Gerar mensagem.'
-            : 'Mude de aba para ver as outras mensagens.'}
-        </Empty>
-      )}
+      {list.data && list.data.length === 0 && <Empty title={EMPTY[tab][0]}>{EMPTY[tab][1]}</Empty>}
       {list.data && list.data.length > 0 && (
         <ul className="message-list">
           {list.data.map((m) => (
-            <MessageCard key={m.id} message={m} onChange={replace} />
+            <MessageCard key={m.id} message={m} onChange={replace} canSend={wa.data?.ready ?? false} />
           ))}
         </ul>
       )}
-
-      <AutoSendBlock settings={settings.data?.whatsapp ?? null} tokenSet={settings.data?.providerTokenSet ?? false} />
     </div>
   )
 }
 
-function MessageCard({ message: m, onChange }: { message: MessageDTO; onChange: (m: MessageDTO) => void }) {
+function MessageCard({
+  message: m,
+  onChange,
+  canSend,
+}: {
+  message: MessageDTO
+  onChange: (m: MessageDTO) => void
+  /** WhatsApp conectado e grupo escolhido. */
+  canSend: boolean
+}) {
   const { toast } = useToast()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(m.body)
   const [busy, setBusy] = useState(false)
   const badge = STATUS_BADGE[m.status]
 
-  const update = async (input: { status?: 'DRAFT' | 'SENT' | 'DISCARDED'; body?: string }, done: string) => {
+  const update = async (input: MessageUpdateInput, done: string) => {
     setBusy(true)
     try {
       const saved = await api.updateMessage(m.id, input)
@@ -120,10 +156,28 @@ function MessageCard({ message: m, onChange }: { message: MessageDTO; onChange: 
     }
   }
 
+  const sendNow = async () => {
+    setBusy(true)
+    try {
+      onChange(await api.sendMessage(m.id))
+      toast('Enviada ao grupo.')
+    } catch (err) {
+      // Em falha o servidor devolve a mensagem já marcada com o erro.
+      const data = err instanceof ApiError ? (err.data as { message?: MessageDTO } | null) : null
+      if (data?.message) onChange(data.message)
+      toast(errorMessage(err), 'danger')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const copy = async () => {
     const ok = await copyText(m.body)
     toast(ok ? 'Mensagem copiada. Cole no grupo.' : 'Não deu para copiar. Selecione o texto e copie à mão.', ok ? 'good' : 'warn')
   }
+
+  const sending = m.status === 'SENDING'
+  const sendable = canSend && (m.status === 'DRAFT' || m.status === 'QUEUED' || m.status === 'FAILED')
 
   return (
     <li className="card message-card">
@@ -138,9 +192,11 @@ function MessageCard({ message: m, onChange }: { message: MessageDTO; onChange: 
           <p className="message-title">{m.offerTitle ?? 'Oferta removida'}</p>
           <p className="muted small">
             criada {timeAgo(m.createdAt)}
+            {m.status === 'QUEUED' && m.queuedAt && <> · na fila {timeAgo(m.queuedAt)}</>}
             {m.sentAt && <> · enviada {timeAgo(m.sentAt)}</>}
+            {m.attempts > 1 && <> · {m.attempts} tentativas</>}
           </p>
-          {m.error && <p className="store-error small">{m.error}</p>}
+          {m.error && <p className={m.status === 'DISCARDED' ? 'muted small' : 'store-error small'}>{m.error}</p>}
         </div>
       </header>
 
@@ -162,31 +218,48 @@ function MessageCard({ message: m, onChange }: { message: MessageDTO; onChange: 
           </div>
         </form>
       ) : (
-        <WhatsAppBubble text={m.body} time={formatTime(m.createdAt)} />
+        <WhatsAppBubble text={m.body} time={formatTime(m.sentAt ?? m.createdAt)} />
       )}
 
-      {!editing && (
+      {!editing && !sending && (
         <div className="row-actions">
-          <button type="button" className="btn btn-sm btn-accent" onClick={() => void copy()}>
+          {sendable && (
+            <button type="button" className="btn btn-sm btn-accent" onClick={() => void sendNow()} disabled={busy}>
+              {m.status === 'FAILED' ? 'Tentar de novo' : 'Enviar agora'}
+            </button>
+          )}
+          {m.status === 'DRAFT' && canSend && (
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => void update({ status: 'QUEUED' }, 'Na fila. Sai assim que o limite e o horário deixarem.')} disabled={busy}>
+              Pôr na fila
+            </button>
+          )}
+          {m.status === 'QUEUED' && (
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => void update({ status: 'DRAFT' }, 'Saiu da fila e voltou para os rascunhos.')} disabled={busy}>
+              Tirar da fila
+            </button>
+          )}
+          <button type="button" className={`btn btn-sm ${sendable ? 'btn-ghost' : 'btn-accent'}`} onClick={() => void copy()}>
             Copiar
           </button>
           <a className="btn btn-sm btn-ghost" href={whatsappShareUrl(m.body)} target="_blank" rel="noopener noreferrer">
             Abrir no WhatsApp
           </a>
-          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setEditing(true)} disabled={busy}>
-            Editar texto
-          </button>
           {m.status !== 'SENT' && (
-            <button type="button" className="btn btn-sm btn-primary" onClick={() => void update({ status: 'SENT' }, 'Marcada como enviada.')} disabled={busy}>
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setEditing(true)} disabled={busy}>
+              Editar texto
+            </button>
+          )}
+          {m.status !== 'SENT' && (
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => void update({ status: 'SENT' }, 'Marcada como enviada.')} disabled={busy}>
               Marcar como enviada
             </button>
           )}
-          {m.status === 'DRAFT' && (
+          {(m.status === 'DRAFT' || m.status === 'QUEUED' || m.status === 'FAILED') && (
             <button type="button" className="btn btn-sm btn-ghost" onClick={() => void update({ status: 'DISCARDED' }, 'Mensagem descartada.')} disabled={busy}>
               Descartar
             </button>
           )}
-          {m.status !== 'DRAFT' && (
+          {(m.status === 'SENT' || m.status === 'DISCARDED') && (
             <button type="button" className="btn btn-sm btn-ghost" onClick={() => void update({ status: 'DRAFT' }, 'Voltou para os rascunhos.')} disabled={busy}>
               Voltar para rascunho
             </button>
@@ -194,38 +267,5 @@ function MessageCard({ message: m, onChange }: { message: MessageDTO; onChange: 
         </div>
       )}
     </li>
-  )
-}
-
-function AutoSendBlock({
-  settings,
-  tokenSet,
-}: {
-  settings: { provider: string; providerUrl: string; providerInstance: string; groupId: string } | null
-  tokenSet: boolean
-}) {
-  return (
-    <section className="card card-muted" aria-labelledby="h-auto-send">
-      <h2 id="h-auto-send">Envio automático para o grupo — próxima etapa</h2>
-      <p>
-        Para o PromoEye mandar sozinho para o grupo, ele precisa de um provedor de WhatsApp conectado a um número. A API
-        oficial da Meta (Cloud API) não envia para grupos comuns; Evolution API e Z-API enviam, mas usam um número de WhatsApp
-        comum, que pode ser bloqueado se mandar mensagens demais. A fila desta página já está pronta para esse provedor
-        consumir.
-      </p>
-      <fieldset disabled className="form-grid">
-        <legend className="sr-only">Provedor de envio (desabilitado)</legend>
-        <SelectField label="Provedor" value={settings?.provider ?? 'none'} onChange={() => undefined}>
-          <option value="none">Nenhum (envio manual)</option>
-          <option value="evolution">Evolution API</option>
-          <option value="zapi">Z-API</option>
-          <option value="cloud">WhatsApp Cloud API (Meta)</option>
-        </SelectField>
-        <TextField label="Endereço do provedor" value={settings?.providerUrl ?? ''} onChange={() => undefined} placeholder="https://" />
-        <TextField label="Instância" value={settings?.providerInstance ?? ''} onChange={() => undefined} />
-        <TextField label="ID do grupo" value={settings?.groupId ?? ''} onChange={() => undefined} placeholder="120363…@g.us" />
-        <TextField label="Token" type="password" value={tokenSet ? '••••••••' : ''} onChange={() => undefined} placeholder="não configurado" />
-      </fieldset>
-    </section>
   )
 }

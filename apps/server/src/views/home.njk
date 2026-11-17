@@ -15,7 +15,7 @@
       </div>
       <form class="shop-search" role="search" method="get" action="/#ofertas">
         <label class="sr-only" for="busca">Buscar entre os itens</label>
-        <input id="busca" type="search" name="q" value="{{ shop.state.q }}" placeholder="O que você procura?" autocomplete="off" enterkeyhint="search" maxlength="80">
+        <input id="busca" type="search" name="q" value="{{ shop.state.q }}" placeholder="Ex.: air fryer, geladeira…" autocomplete="off" enterkeyhint="search" maxlength="80">
         {% if shop.state.cat %}<input type="hidden" name="cat" value="{{ shop.state.cat }}">{% endif %}
         {% if shop.state.promo %}<input type="hidden" name="promo" value="1">{% endif %}
         {% if shop.state.ordem != 'relevancia' %}<input type="hidden" name="ordem" value="{{ shop.state.ordem }}">{% endif %}
@@ -43,7 +43,8 @@
       </div>
 
       {% if shop.cards.length %}
-      <ul class="pgrid">{% for c in shop.cards %}{{ productCard(c) }}{% endfor %}</ul>
+      {# os 4 primeiros aparecem sem rolar (5 no desktop largo): foto sem lazy, e as 2 primeiras com prioridade #}
+      <ul class="pgrid">{% for c in shop.cards %}{{ productCard(c, loop.index) }}{% endfor %}</ul>
       {% else %}
       <div class="shop-empty">
         <p><b>Nenhum item encontrado{% if shop.state.q %} para “{{ shop.state.q }}”{% endif %}.</b></p>
@@ -121,7 +122,7 @@
       <div class="span-5 selos__text">
         <div class="section-head">
           <h2 id="selos-h">Selos que separam promoção de preço falso</h2>
-          <p>Cada oferta ganha selos conforme o histórico que registramos.</p>
+          <p>Cada oferta ganha selos conforme o histórico de preços dela.</p>
         </div>
         <div class="tabs" role="tablist" aria-label="Selos">
           <button class="tab" type="button" role="tab" id="tab-real" aria-controls="tp-real ts-real" aria-selected="true">Medir o desconto real</button>
@@ -205,7 +206,7 @@
         </div>
       </div>
       <div class="faq span-6 start-7">
-        <div class="faq__item"><h3>O {{ site.title }} vende alguma coisa?</h3><p>Não. O clique leva você à loja, e a compra é feita lá. Alguns links são de afiliado: a loja pode nos pagar comissão, e o preço para você é o mesmo.</p></div>
+        <div class="faq__item"><h3>O {{ site.title }} vende alguma coisa?</h3><p>Não. O clique leva você à loja, e a compra é feita lá. Alguns links são de afiliado: a loja pode pagar comissão ao <span translate="no">{{ site.title }}</span>, e o preço para você é o mesmo.</p></div>
         <div class="faq__item"><h3>De quanto em quanto tempo o preço muda aqui?</h3><p>De hora em hora, no minuto 5.{% if lastRunAt %} A última coleta foi às {{ lastRunAt | hourBR }}.{% endif %} O preço na loja pode mudar entre uma coleta e outra.</p></div>
         <div class="faq__item"><h3>Quais lojas entram?</h3><p>{{ counts.autoStores }} automaticamente, entre grandes varejistas e lojas oficiais de fabricantes.{% if manualStores.length %} {{ manualStores | join(', ') }} bloqueiam robôs, então as ofertas delas entram à mão.{% endif %}</p></div>
         <div class="faq__item"><h3>Aparece vendedor de marketplace?</h3><p>Só os de uma lista de confiáveis, como Magazine Luiza, Fast Shop e iPlace vendendo na Americanas. Vendedor desconhecido fica de fora.</p></div>

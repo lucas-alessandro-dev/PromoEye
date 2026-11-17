@@ -3,7 +3,7 @@ import type { Offer, Store, WatchItem } from '@prisma/client'
 import { config, publicUrl } from '../config.js'
 import { BlockedError, sleep } from '../lib/http.js'
 import { num, numReq, prisma } from '../lib/prisma.js'
-import { getSettings } from '../services/settings.js'
+import { autoQueueEnabled, getSettings } from '../services/settings.js'
 import { adapterFor } from './adapters/index.js'
 import { matchOffer, outlierCut, requiredTerms, sellerAllowed, type MatchRules, type SellerRules } from './matcher.js'
 import { containsTerm, normalize } from '../lib/text.js'
@@ -428,7 +428,18 @@ async function processItem(
   }
 }
 
-export async function draftForBestDeal(item: WatchItem, offerId: string, force = false): Promise<boolean> {
+/**
+ * Monta a mensagem do grupo para a oferta. Com o envio automático ligado ela
+ * já nasce na fila (QUEUED); senão, fica como rascunho para você revisar.
+ * `force` (botão "Gerar mensagem") pula a regra de não repetir preço e sempre
+ * gera rascunho: quem pediu quer ver antes.
+ */
+export async function draftForBestDeal(
+  item: WatchItem,
+  offerId: string,
+  opts: { force?: boolean } = {}
+): Promise<boolean> {
+  const force = opts.force ?? false
   const offer = await prisma.offer.findUnique({ where: { id: offerId }, include: { store: true } })
   if (!offer) return false
   const price = numReq(offer.price)
@@ -457,6 +468,9 @@ export async function draftForBestDeal(item: WatchItem, offerId: string, force =
     link: `${publicUrl}/ir/${offer.id}?c=wa`,
     realDiscountPct: offer.realDiscountPct,
   })
-  await prisma.outboundMessage.create({ data: { offerId: offer.id, price, reason, body } })
+  const queue = !force && (await autoQueueEnabled())
+  await prisma.outboundMessage.create({
+    data: { offerId: offer.id, price, reason, body, status: queue ? 'QUEUED' : 'DRAFT', queuedAt: queue ? new Date() : null },
+  })
   return true
 }

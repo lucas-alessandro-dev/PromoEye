@@ -52,8 +52,12 @@ services:
       # Um salto só: o Caddy.
       TRUST_PROXY: 'true'
       TZ: America/Sao_Paulo
+      WAHA_URL: http://waha:3000
+      WAHA_API_KEY: ${WAHA_API_KEY:?defina WAHA_API_KEY no .env (o up.sh cria)}
+      WAHA_SESSION: default
     networks:
       internal: {}
+      whatsapp: {}
       proxy:
         # Nome único na rede compartilhada: outros projetos também terão um "app".
         aliases: [promoeye-app]
@@ -65,11 +69,41 @@ services:
       retries: 5
       start_period: 30s
 
+  # WhatsApp HTTP API (https://waha.devlike.pro): gratuito e open source desde a
+  # 2026.6. Mantém o número conectado e recebe os envios do app. Motor GOWS:
+  # sem navegador, pouca memória. Nada de porta publicada nem painel/Swagger
+  # ligados: só o app fala com ele, pela rede "whatsapp".
+  waha:
+    image: devlikeapro/waha:gows-2026.10.1
+    restart: unless-stopped
+    environment:
+      WHATSAPP_DEFAULT_ENGINE: GOWS
+      WAHA_API_KEY: ${WAHA_API_KEY:?defina WAHA_API_KEY no .env (o up.sh cria)}
+      WAHA_DASHBOARD_ENABLED: 'false'
+      WHATSAPP_SWAGGER_ENABLED: 'false'
+      # Depois de reiniciar, religa a sessão sozinho (a doc usa os dois nomes).
+      WHATSAPP_RESTART_ALL_SESSIONS: 'True'
+      WAHA_RESTART_ALL_SESSIONS: 'True'
+      TZ: America/Sao_Paulo
+    volumes:
+      # O login do número fica aqui: sem o volume, cada reinício pediria QR code.
+      - waha-sessions:/app/.sessions
+    networks:
+      whatsapp: {}
+      whatsapp-out: {}
+    mem_limit: 512m
+
 networks:
   internal:
     internal: true
+  # app ↔ WAHA, sem saída para a internet.
+  whatsapp:
+    internal: true
+  # WAHA → servidores do WhatsApp e fotos das lojas.
+  whatsapp-out: {}
   proxy:
     external: true
 
 volumes:
   db-data:
+  waha-sessions:

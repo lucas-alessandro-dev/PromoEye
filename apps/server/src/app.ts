@@ -12,6 +12,7 @@ import { itemRoutes } from './routes/api/items.js'
 import { offerRoutes } from './routes/api/offers.js'
 import { storeRoutes } from './routes/api/stores.js'
 import { messageRoutes } from './routes/api/messages.js'
+import { whatsappRoutes } from './routes/api/whatsapp.js'
 import { goRoutes } from './routes/go.js'
 import { adminAppRoutes } from './routes/admin-app.js'
 import { renderNotFound, siteRoutes } from './routes/site.js'
@@ -71,6 +72,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(offerRoutes)
       await api.register(storeRoutes)
       await api.register(messageRoutes)
+      await api.register(whatsappRoutes)
     },
     { prefix: '/api/admin' }
   )
