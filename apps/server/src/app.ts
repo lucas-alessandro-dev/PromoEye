@@ -16,6 +16,10 @@ import { whatsappRoutes } from './routes/api/whatsapp.js'
 import { goRoutes } from './routes/go.js'
 import { adminAppRoutes } from './routes/admin-app.js'
 import { renderNotFound, siteRoutes } from './routes/site.js'
+import { productRoutes } from './routes/product.js'
+import { alertRoutes } from './routes/alerts.js'
+import { catalogRoutes } from './routes/api/catalog.js'
+import { alertAdminRoutes } from './routes/api/alerts.js'
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -41,6 +45,12 @@ export async function buildApp(): Promise<FastifyInstance> {
       err.statusCode = 400
       done(err, undefined)
     }
+  })
+
+  // Formulários da vitrine (alerta de preço) chegam como urlencoded: funcionam sem JavaScript.
+  app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string', bodyLimit: 8 * 1024 }, (_req, body, done) => {
+    const text = typeof body === 'string' ? body : body.toString('utf8')
+    done(null, Object.fromEntries(new URLSearchParams(text)))
   })
 
   await app.register(securityPlugin)
@@ -73,6 +83,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(storeRoutes)
       await api.register(messageRoutes)
       await api.register(whatsappRoutes)
+      await api.register(catalogRoutes)
+      await api.register(alertAdminRoutes)
     },
     { prefix: '/api/admin' }
   )
@@ -80,6 +92,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(goRoutes)
   await app.register(adminAppRoutes)
   await app.register(siteRoutes)
+  await app.register(productRoutes)
+  await app.register(alertRoutes)
 
   // Endereço desconhecido: a API responde JSON; quem navega vê a página 404 da vitrine
   // (antes recebia o JSON cru do Fastify).

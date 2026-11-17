@@ -1,16 +1,18 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import { daysUntilBlackFriday, flagTone, listDiscount } from '@promoeye/shared'
+import { daysUntilBlackFriday, displayGtin, flagTone, listDiscount } from '@promoeye/shared'
 import type { Offer, PricePoint, Store, WatchItem } from '@prisma/client'
 import { publicUrl } from '../config.js'
 import { num, numReq, prisma } from '../lib/prisma.js'
 import { render } from '../lib/render.js'
 import { normalize } from '../lib/text.js'
+import { breadcrumbLd, itemLd, jsonLdScript, siteLd } from '../lib/jsonld.js'
 import { currentUser } from '../plugins/auth.js'
-import { FRESH_MS } from '../collector/run.js'
+import { FRESH_MS } from '../collector/fresh.js'
 import { nextRunAt } from '../collector/scheduler.js'
 import { collectEveryMin } from '../lib/peak.js'
 import { typicalPrice } from '../collector/scoring.js'
 import { getSettings } from '../services/settings.js'
+import { alertBoxVM } from './alerts.js'
 
 /**
  * Vitrine pública. Tudo aqui é lido do banco; nenhuma página dispara busca
@@ -40,14 +42,24 @@ export interface CardVM {
   flags: { id: string; tone: string }[]
   warn: boolean
   installments: string | null
+  /** Preço no Pix MENOR que o preço principal (regra de Pix da loja). null = não há diferença. */
+  pixLower: number | null
+  /** O preço principal já é o do Pix (KaBuM!). */
+  pixIsPrice: boolean
+  /** Preço no cartão, quando é maior que o principal. */
+  cardPrice: number | null
   sellerName: string | null
   promoLabel: string | null
   isDeal: boolean
   available: boolean
+  /** Oferta cadastrada à mão (Mercado Livre, Magalu…): o "conferido há" não vale para ela. */
+  manual: boolean
   lastSeenAt: Date
+  /** Página do produto no catálogo (mesmo EAN em outras lojas). */
+  productHref: string | null
 }
 
-type OfferFull = Offer & { store: Store; watchItem: WatchItem }
+export type OfferFull = Offer & { store: Store; watchItem: WatchItem; product?: { slug: string } | null }
 
 const FLAG_ORDER = ['abaixo-do-alvo', 'menor-preco', 'mais-barato', 'desconto-real', 'caiu-agora', 'oferta-relampago', 'preco-de-inflado', 'subiu-antes']
 
@@ -58,6 +70,8 @@ export function cardVM(o: OfferFull): CardVM {
   const off = listDiscount(price, listPrice)
   const flags = FLAG_ORDER.filter((f) => o.flags.includes(f)).map((id) => ({ id, tone: flagTone(id) }))
   const showList = Boolean(listPrice && off && off >= 0.03 && !inflated)
+  const pix = num(o.pixPrice)
+  const card = num(o.cardPrice)
   return {
     id: o.id,
     href: `/ir/${o.id}`,
@@ -75,11 +89,16 @@ export function cardVM(o: OfferFull): CardVM {
     flags,
     warn: flags.some((f) => f.tone === 'warn'),
     installments: o.installments,
+    pixLower: pix !== null && pix < price - 0.005 ? pix : null,
+    pixIsPrice: pix !== null && Math.abs(pix - price) < 0.005,
+    cardPrice: card !== null && card > price + 0.005 ? card : null,
     sellerName: o.soldByStore ? null : o.sellerName,
     promoLabel: o.promoLabel,
     isDeal: o.isDeal,
     available: o.available,
+    manual: o.source === 'MANUAL',
     lastSeenAt: o.lastSeenAt,
+    productHref: o.product ? `/produtos/${o.product.slug}` : null,
   }
 }
 
@@ -91,10 +110,10 @@ const currentWhere = () => ({
   OR: [{ source: 'MANUAL' as const }, { lastSeenAt: { gte: new Date(Date.now() - FRESH_MS) } }],
 })
 const freshWhere = () => ({ ...currentWhere(), available: true })
-const isCurrent = (o: Offer, now: Date) => o.source === 'MANUAL' || o.lastSeenAt.getTime() >= now.getTime() - FRESH_MS
-const byPrice = (a: Offer, b: Offer) => numReq(a.price) - numReq(b.price)
+export const isCurrent = (o: Offer, now: Date) => o.source === 'MANUAL' || o.lastSeenAt.getTime() >= now.getTime() - FRESH_MS
+export const byPrice = (a: Offer, b: Offer) => numReq(a.price) - numReq(b.price)
 
-async function gate(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
+export async function gate(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
   const settings = await getSettings()
   if (settings.publicSite) return true
   if (await currentUser(request)) return true
@@ -102,7 +121,7 @@ async function gate(request: FastifyRequest, reply: FastifyReply): Promise<boole
   return false
 }
 
-async function baseContext() {
+export async function baseContext() {
   const settings = await getSettings()
   const lastRun = await prisma.collectorRun.findFirst({
     where: { status: { in: ['OK', 'PARTIAL'] } },
@@ -246,7 +265,7 @@ function sortCards(cards: ProductCardVM[], ordem: Order): ProductCardVM[] {
 
 // ── Gráficos (desenhados no servidor; o JavaScript só acrescenta o cursor) ─────────────────────
 
-interface Point {
+export interface Point {
   at: Date
   price: number
   storeId?: string | null
@@ -270,7 +289,7 @@ function niceTicks(lo: number, hi: number, count = 4): number[] {
  * engorda); rótulos, pontos e cursor são HTML posicionado em %, para o texto
  * ficar do mesmo tamanho no celular e no computador.
  */
-function historyChart(points: Point[], now: Date, typical: number | null, days: number) {
+export function historyChart(points: Point[], now: Date, typical: number | null, days: number) {
   // Um ponto só é um preço que não mudou desde então (quem garante as 2 coletas é quem chama).
   if (!points.length) return null
   const x0 = points[0]!.at.getTime()
@@ -320,7 +339,7 @@ function historyChart(points: Point[], now: Date, typical: number | null, days: 
 }
 
 /** Menor preço de uma loja em cada momento: junta o histórico de todos os anúncios dela. */
-function storeSeries(offers: (Offer & { history: PricePoint[] })[], since: Date, now: Date): Point[] {
+export function storeSeries(offers: (Offer & { history: PricePoint[] })[], since: Date, now: Date): Point[] {
   const times = new Set<number>([since.getTime()])
   for (const o of offers) for (const h of o.history) if (h.at > since) times.add(h.at.getTime())
   const out: Point[] = []
@@ -339,7 +358,7 @@ function storeSeries(offers: (Offer & { history: PricePoint[] })[], since: Date,
 }
 
 /** Mini-gráfico de uma loja (120×32), na mesma janela de tempo do gráfico grande. */
-function sparkline(points: Point[], since: Date, now: Date) {
+export function sparkline(points: Point[], since: Date, now: Date) {
   if (!points.length) return null
   const x0 = Math.max(since.getTime(), points[0]!.at.getTime())
   const x1 = now.getTime()
@@ -384,8 +403,21 @@ export async function siteRoutes(app: FastifyInstance) {
   })
 
   app.get('/sitemap.xml', async (_req, reply) => {
-    const items = await prisma.watchItem.findMany({ where: { active: true }, select: { slug: true, updatedAt: true } })
-    const urls = [`<url><loc>${publicUrl}/</loc></url>`, ...items.map((i) => `<url><loc>${publicUrl}/ofertas/${i.slug}</loc><lastmod>${i.updatedAt.toISOString()}</lastmod></url>`)]
+    const [items, products] = await Promise.all([
+      prisma.watchItem.findMany({ where: { active: true }, select: { slug: true, updatedAt: true } }),
+      // Só produto com oferta de agora: página de produto sem preço é página vazia para o Google.
+      prisma.product.findMany({
+        where: { offers: { some: freshWhere() } },
+        select: { slug: true, updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 45_000,
+      }),
+    ])
+    const urls = [
+      `<url><loc>${publicUrl}/</loc></url>`,
+      ...items.map((i) => `<url><loc>${publicUrl}/ofertas/${i.slug}</loc><lastmod>${i.updatedAt.toISOString()}</lastmod></url>`),
+      ...products.map((p) => `<url><loc>${publicUrl}/produtos/${p.slug}</loc><lastmod>${p.updatedAt.toISOString()}</lastmod></url>`),
+    ]
     return reply
       .type('application/xml; charset=utf-8')
       .send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join('')}</urlset>`)
@@ -442,6 +474,7 @@ export async function siteRoutes(app: FastifyInstance) {
     return render(reply, 'home.njk', {
       ...base,
       useMoments: true,
+      jsonLd: siteLd({ name: base.site.title, url: publicUrl }).map(jsonLdScript),
       page: {
         title: `${base.site.title}: menores preços conferidos em ${autoStores.length} lojas`,
         description: `O ${base.site.title} confere de hora em hora o preço dos itens que acompanha em ${autoStores.length} lojas confiáveis e mostra só o desconto real, contra o histórico.`,
@@ -493,7 +526,7 @@ export async function siteRoutes(app: FastifyInstance) {
     })
   })
 
-  app.get<{ Params: { slug: string }; Querystring: { dias?: string } }>('/ofertas/:slug', async (request, reply) => {
+  app.get<{ Params: { slug: string }; Querystring: { dias?: string; alerta?: string } }>('/ofertas/:slug', async (request, reply) => {
     if (!(await gate(request, reply))) return reply
     const item = await prisma.watchItem.findUnique({ where: { slug: request.params.slug } })
     if (!item || !item.active) return renderNotFound(request, reply, 'item')
@@ -505,7 +538,7 @@ export async function siteRoutes(app: FastifyInstance) {
     const [offers, stores, snaps, lastRun, others] = await Promise.all([
       prisma.offer.findMany({
         where: { watchItemId: item.id, hidden: false, store: { enabled: true } },
-        include: { store: true, watchItem: true, history: { orderBy: { at: 'asc' } } },
+        include: { store: true, watchItem: true, product: { select: { slug: true, name: true, gtin: true } }, history: { orderBy: { at: 'asc' } } },
       }),
       prisma.store.findMany({ where: { enabled: true }, orderBy: { sortOrder: 'asc' } }),
       prisma.itemSnapshot.findMany({
@@ -585,8 +618,32 @@ export async function siteRoutes(app: FastifyInstance) {
 
     const typicalOff = best && typical && best.price < typical ? 1 - best.price / typical : null
 
+    // ── Catálogo e dados estruturados ──
+    // Produtos (mesmo EAN) entre os anúncios de agora, do mais barato para o mais caro.
+    const products = [...new Map(avail.filter((o) => o.product).map((o) => [o.product!.slug, o.product!])).values()]
+    const pageUrl = `${publicUrl}/ofertas/${item.slug}`
+    const onlyProduct = products.length === 1 && avail.every((o) => o.productId === avail[0]!.productId) ? products[0]! : null
+    const ld = itemLd({
+      name: item.name,
+      url: pageUrl,
+      images,
+      category: item.category,
+      gtin: onlyProduct ? displayGtin(onlyProduct.gtin) : null,
+      offers: avail.map((o) => ({ price: numReq(o.price), storeName: o.store.name, available: o.available })),
+      brands: avail.map((o) => o.brand ?? '').filter(Boolean),
+      products: products.map((p) => ({ name: p.name, url: `${publicUrl}/produtos/${p.slug}` })),
+    })
+    const crumbs = [
+      { name: 'Início', url: `${publicUrl}/` },
+      ...(item.category ? [{ name: item.category, url: `${publicUrl}/?cat=${encodeURIComponent(item.category)}` }] : []),
+      { name: item.name, url: pageUrl },
+    ]
+
     return render(reply, 'item.njk', {
       ...base,
+      jsonLd: [...(ld ? [ld] : []), breadcrumbLd(crumbs)].map(jsonLdScript),
+      alertBox: await alertBoxVM({ kind: 'item', slug: item.slug, code: request.query.alerta, bestPrice: best?.price ?? null }),
+      catalog: products.slice(0, 8).map((p) => ({ name: p.name, href: `/produtos/${p.slug}` })),
       page: {
         title: `${item.name}: menor preço agora e histórico — ${base.site.title}`,
         description: best

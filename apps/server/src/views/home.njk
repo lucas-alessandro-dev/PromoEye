@@ -11,7 +11,7 @@
     <header class="shop-head">
       <div class="shop-head__text">
         <h1>Menores preços de hoje</h1>
-        <p>{{ shop.total }} {{ 'item' if shop.total == 1 else 'itens' }} em {{ counts.autoStores }} lojas confiáveis, conferidos {% if collectEvery < 60 %}a cada {{ collectEvery }} minutos{% else %}de hora em hora{% endif %}{% if lastRunAt %} · atualizado às {{ lastRunAt | hourBR }}{% endif %} · Black Friday {% if bf.days == 0 %}é hoje{% elif bf.days == 1 %}é amanhã{% else %}em {{ bf.days }} dias{% endif %}</p>
+        <p>{{ shop.total }} {{ 'item' if shop.total == 1 else 'itens' }} em {{ counts.autoStores }} lojas confiáveis, conferidos {% if collectEvery < 60 %}a cada {{ collectEvery }} minutos{% else %}de hora em hora{% endif %}{% if lastRunAt %} · atualizado às {{ lastRunAt | hourBR }} ({{ lastRunAt | ago }}){% endif %} · Black Friday {% if bf.days == 0 %}é hoje{% elif bf.days == 1 %}é amanhã{% else %}em {{ bf.days }} dias{% endif %}</p>
       </div>
       <form class="shop-search" role="search" method="get" action="/#ofertas">
         <label class="sr-only" for="busca">Buscar entre os itens</label>
@@ -76,7 +76,7 @@
       <article class="card card--row span-4">
         <span class="step-num">1</span>
         <h3>Busca cada item de hora em hora</h3>
-        <p>No minuto 5 de cada hora, em {{ counts.autoStores }} lojas, pela mesma busca que o site da loja usa.</p>
+        <p>{% if collectEvery < 60 %}A cada {{ collectEvery }} minutos nesta Black Friday{% else %}No minuto 5 de cada hora{% endif %}, em {{ counts.autoStores }} lojas, pela mesma busca que o site da loja usa.</p>
         <div class="panel"><div class="stage stage--fade-b"><div class="ui ui-panel pe-mini">
           <div class="pe-mini__head"><b>Coleta</b>{% if lastRunAt %}<span>{{ lastRunAt | hourBR }}</span>{% endif %}</div>
           <ul class="pe-mini__rows">

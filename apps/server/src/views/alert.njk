@@ -1,0 +1,42 @@
+{% extends "layout.njk" %}
+
+{#
+  Página do alerta (o link que vai no e-mail). Confirmar e cancelar são
+  botões (POST): antivírus de e-mail abrem links sozinhos, e um GET que
+  confirmasse confirmaria por eles.
+#}
+
+{% block main %}
+<div class="shop">
+  <div class="wrap">
+    <section class="nf alertpage" aria-labelledby="alert-h">
+      {% if not alert %}
+      <p class="nf__code">Link inválido</p>
+      <h1 id="alert-h">Não encontramos este alerta</h1>
+      <p>O link pode estar incompleto (alguns e-mails quebram links longos) ou o alerta foi apagado.</p>
+      <a class="btn btn--secondary" href="/">Ver as promoções</a>
+      {% else %}
+      <p class="nf__code">{% if alert.status == 'ACTIVE' %}Alerta ligado{% elif alert.status == 'PENDING' %}Falta confirmar{% else %}Alerta cancelado{% endif %}</p>
+      <h1 id="alert-h">{% if alert.target %}{{ alert.target.name }}{% else %}Seu alerta{% endif %}</h1>
+      {% if ok == 'confirmado' %}<p class="alertbox__msg alertbox__msg--ok" role="status">Pronto, alerta confirmado. Você recebe um e-mail quando o preço cair.</p>{% endif %}
+      {% if ok == 'cancelado' %}<p class="alertbox__msg alertbox__msg--ok" role="status">Alerta cancelado. Não enviamos mais nada para {{ alert.email }} sobre este item.</p>{% endif %}
+
+      <p>Para <b>{{ alert.email }}</b>:
+        {% if alert.targetPrice %}aviso quando o menor preço ficar abaixo de <b>{{ alert.targetPrice | brl }}</b>.{% else %}aviso quando virar promoção de verdade (abaixo do preço típico que registramos).{% endif %}
+        {% if alert.lastNotifiedAt %}Último aviso: {{ alert.lastNotifiedAt | dateBR }}.{% endif %}</p>
+
+      <div class="btn-row">
+        {% if alert.status == 'PENDING' %}
+        <form method="post" action="{{ actionBase }}/confirmar"><button class="btn btn--primary" type="submit">Confirmar o alerta</button></form>
+        {% endif %}
+        {% if alert.status != 'UNSUBSCRIBED' %}
+        <form method="post" action="{{ actionBase }}/cancelar"><button class="btn btn--secondary" type="submit">Cancelar o alerta</button></form>
+        {% endif %}
+        {% if alert.target %}<a class="btn btn--secondary" href="{{ alert.target.href }}">Ver o preço agora</a>{% endif %}
+      </div>
+      <p class="alertbox__fine">Guardamos só o e-mail, o item e o texto do consentimento que você aceitou. Para apagar tudo, cancele aqui e peça a exclusão respondendo a qualquer e-mail nosso.</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

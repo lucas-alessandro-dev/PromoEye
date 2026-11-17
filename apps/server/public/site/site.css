@@ -510,3 +510,59 @@ html[data-buttons] .btn.btn--wa::after { content: none; display: none; }
 .pe-de__note { margin: 10px 0 0; font-size: 14px; color: var(--u-muted); max-width: 40ch; }
 @media (max-width: 1023px) { #selos .frame--split { --p-h: 400px; } .selos__screen { inset: 32px 32px auto 32px; } }
 @media (max-width: 639px) { #selos .frame--split { --p-h: 280px; } .selos__screen { inset: 16px 16px auto 16px; } .selos__screen .pe-chart svg { min-height: 0; } }
+
+/* ── Pix, cartão e frescor na caixa de compra (17/11/2026) ─────────────────────────────────── */
+.buy__pix { margin: 6px 0 0; font-size: 15px; color: var(--pe-good); }
+.buy__pix b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.buy__fresh { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+.buy__fresh-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pe-good); box-shadow: 0 0 0 3px var(--pe-good-bg); flex: none; }
+.pdp__ean { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.st__prod, .pe-offer__prod { color: var(--ink); text-underline-offset: 3px; }
+
+/* ── Catálogo: os modelos (EAN) de um item ── */
+.catalog { margin-top: 8px; }
+.catalog__lead { margin: 12px 0 0; max-width: 72ch; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.catalog__lead a { color: var(--ink); text-underline-offset: 3px; }
+.catalog__list { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.catalog__list a { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 14px; border-radius: 999px; background: var(--pe-card); box-shadow: var(--pe-ring);
+  color: var(--ink); font: 500 14px/1.3 var(--font-text); text-decoration: none; }
+.catalog__list a:hover { box-shadow: var(--pe-lift); }
+.catalog__list a:focus-visible { outline: 2px solid var(--p-action); outline-offset: 2px; }
+
+/* ── "Me avise quando baixar" ── */
+.alertbox { margin-top: 16px; padding: 22px 24px; border-radius: 18px; background: color-mix(in oklab, var(--p-surface) 70%, #fff); box-shadow: var(--pe-ring); }
+.alertbox__title { margin: 0; font: 500 18px/1.25 var(--font-text); letter-spacing: -0.01em; }
+.alertbox__lead { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.alertbox__msg { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; font: 500 14px/1.45 var(--font-text); }
+.alertbox__msg--ok { background: var(--pe-good-bg); color: #135c37; }
+.alertbox__msg--err { background: var(--pe-warn-bg); color: var(--pe-warn); }
+.alertbox__form { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; margin-top: 14px; }
+.alertbox__field { display: grid; gap: 6px; font: 500 13px/1.3 var(--font-text); }
+.alertbox__field small { font-weight: 400; color: var(--muted); }
+.alertbox__field > input, .alertbox__money { box-sizing: border-box; width: 100%; height: 46px; border: 0; border-radius: 10px; background: #fff; box-shadow: inset 0 0 0 1px rgb(17 24 39 / .16); font: 400 16px/1 var(--font-text); color: var(--ink); }
+.alertbox__field > input { padding: 0 14px; }
+.alertbox__money { display: flex; align-items: center; gap: 6px; padding-left: 14px; color: var(--muted); }
+.alertbox__money input { flex: 1; min-width: 0; width: 100%; height: 100%; margin: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; font: inherit; color: var(--ink); padding: 0 14px 0 0; -webkit-appearance: none; appearance: none; }
+.alertbox__field > input:focus-visible, .alertbox__money:focus-within { outline: 2px solid var(--p-action); outline-offset: 1px; }
+.alertbox__money input:focus-visible { outline: none; }
+.alertbox__hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.alertbox__consent { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.45; color: var(--ink); cursor: pointer; }
+.alertbox__consent input { width: 20px; height: 20px; margin: 0; flex: none; accent-color: var(--p-inv-bg); }
+/* Botão sólido escuro: o laranja fica só para "Ir para a loja", a ação principal da página. */
+.alertbox__submit { grid-column: 1 / -1; display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 20px; border: 0;
+  border-radius: var(--r-btn, 10px); background: var(--p-inv-bg); color: var(--p-inv-ink); font: 500 15px/1 var(--font-text); cursor: pointer; transition: background .15s ease; }
+.alertbox__submit:hover { background: color-mix(in oklab, var(--p-inv-bg) 85%, #fff); }
+.alertbox__submit:focus-visible { outline: 2px solid var(--p-action); outline-offset: 2px; }
+.alertbox__fine { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.alertbox__fine a { color: var(--ink); text-underline-offset: 3px; }
+@media (max-width: 639px) {
+  .alertbox { padding: 18px; }
+  .alertbox__form { grid-template-columns: 1fr; }
+}
+
+/* ── Página do alerta (link do e-mail) ── */
+.alertpage { margin: 8px 0 48px; }
+.alertpage .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.alertpage .btn-row form { margin: 0; }
+.alertpage .alertbox__msg { margin: 0; }
+@media (max-width: 639px) { .alertpage .btn-row, .alertpage .btn-row form { width: 100%; } .alertpage .btn-row .btn { width: 100%; } }

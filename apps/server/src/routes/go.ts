@@ -42,7 +42,7 @@ export async function goRoutes(app: FastifyInstance) {
       } catch {
         referrer = null
       }
-      const channel = request.query.c === 'wa' ? 'whatsapp' : 'site'
+      const channel = request.query.c === 'wa' ? 'whatsapp' : request.query.c === 'email' ? 'email' : 'site'
       // A prévia do link (WhatsApp, WAHA, redes sociais) abre a URL sozinha;
       // isso não é gente clicando.
       if (!isLinkPreviewBot(request.headers['user-agent'])) {

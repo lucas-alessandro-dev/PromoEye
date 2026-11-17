@@ -86,12 +86,28 @@ const envSchema = z.object({
     .trim()
     .regex(/^[\w-]{1,60}$/, 'WAHA_SESSION: só letras, números, _ e -')
     .default('default'),
+
+  /**
+   * E-mail dos alertas "me avise quando baixar" (Brevo, Amazon SES, Resend,
+   * Mailgun… qualquer SMTP). Ex.: smtps://usuario:senha@smtp-relay.brevo.com:465
+   * Vazio desliga os alertas: o formulário some da vitrine e nada é enviado.
+   */
+  SMTP_URL: z
+    .string()
+    .trim()
+    .default('')
+    .refine((v) => v === '' || /^smtps?:\/\/[^\s]+$/.test(v), 'SMTP_URL precisa começar com smtp:// ou smtps://'),
+  /** Remetente, num domínio que o provedor de SMTP autorizou (SPF/DKIM): PromoEye <alertas@seudominio.com.br> */
+  SMTP_FROM: z.string().trim().max(200).default(''),
 })
 
 function load() {
   const env = envSchema.superRefine((v, ctx) => {
     if (v.WAHA_URL && !v.WAHA_API_KEY) {
       ctx.addIssue({ code: 'custom', path: ['WAHA_API_KEY'], message: 'com WAHA_URL definido, a chave do WAHA é obrigatória' })
+    }
+    if (v.SMTP_URL && !/<[^@\s]+@[^>\s]+>|^[^@\s<>]+@[^@\s<>]+$/.test(v.SMTP_FROM)) {
+      ctx.addIssue({ code: 'custom', path: ['SMTP_FROM'], message: 'com SMTP_URL definido, informe o remetente: PromoEye <alertas@seudominio.com.br>' })
     }
     const windows = [
       ['PEAK_FROM', 'PEAK_UNTIL'],

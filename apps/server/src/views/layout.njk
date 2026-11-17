@@ -21,7 +21,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{{ page.title }}</title>
 <meta name="description" content="{{ page.description }}">
-{% if not site.allowIndexing %}<meta name="robots" content="noindex">{% endif %}
+{% if not site.allowIndexing or page.noindex %}<meta name="robots" content="noindex">{% endif %}
 <meta property="og:type" content="website">
 <meta property="og:title" content="{{ page.ogTitle or page.title }}">
 <meta property="og:description" content="{{ page.description }}">
@@ -32,6 +32,9 @@
 {% if site.canonical %}<link rel="canonical" href="{{ site.url }}{{ page.path }}">{% endif %}
 <meta name="site-kind" content="software">
 <meta name="page-type" content="software">
+{# Dados estruturados (Schema.org): já vêm serializados e escapados de lib/jsonld.ts. #}
+{% for ld in jsonLd %}<script type="application/ld+json" nonce="{{ nonce }}">{{ ld | safe }}</script>
+{% endfor %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,400..600&display=swap" rel="stylesheet">
@@ -106,7 +109,7 @@
       <div class="section-head--split">
         <div>
           <h2 id="close-h">{% block closeTitle %}As promoções de hoje, conferidas{% endblock %}</h2>
-          <p class="t-lead">{% if lastRunAt %}Última coleta às {{ lastRunAt | hourBR }}. A próxima sai no minuto 5 da hora que vem.{% else %}A primeira coleta sai no minuto 5 da próxima hora.{% endif %}</p>
+          <p class="t-lead">{% if lastRunAt %}Última coleta às {{ lastRunAt | hourBR }} ({{ lastRunAt | ago }}).{% endif %}{% if nextRunAt %} A próxima sai às {{ nextRunAt | hourBR }}{% if collectEvery < 60 %}: nesta Black Friday, a cada {{ collectEvery }} minutos{% endif %}.{% endif %}</p>
         </div>
         <div class="btn-row">
           {% if site.whatsappInvite %}<a class="btn btn--primary btn--wa" href="{{ site.whatsappInvite }}" target="_blank" rel="noopener">{{ waIcon() }}Entrar no grupo do WhatsApp</a>{% endif %}
@@ -119,7 +122,7 @@
       <div class="grid">
         <div class="span-4 stack-4">
           <a class="nav__logo" href="/#top" translate="no"><span class="mark" data-mark="dots" aria-hidden="true"></span>{{ site.title }}</a>
-          <p class="footer__lede">Preço de Black Friday conferido de hora em hora.</p>
+          <p class="footer__lede">Preço conferido nas lojas, com histórico: desconto de verdade, sem "metade do dobro".</p>
         </div>
         <div class="span-2 footer__col"><h3>Promoções</h3><ul><li><a href="/#ofertas">Menores preços</a></li>{% if site.whatsappInvite %}<li><a href="{{ site.whatsappInvite }}" rel="noopener">Grupo do WhatsApp</a></li>{% endif %}</ul></div>
         <div class="span-2 footer__col"><h3>Como funciona</h3><ul><li><a href="/#como-funciona">Os 3 passos</a></li><li><a href="/#como-funciona">As lojas</a></li></ul></div>

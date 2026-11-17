@@ -1,5 +1,5 @@
 {% extends "layout.njk" %}
-{% from "partials/_macros.njk" import offerRow, chip, productCard, bigPrice %}
+{% from "partials/_macros.njk" import offerRow, chip, productCard, bigPrice, payLines, checked, alertForm %}
 
 {#
   Página do item, no jeito de uma página de produto das grandes lojas:
@@ -45,8 +45,9 @@
           <p class="buy__label">Menor preço agora</p>
           {% if best.showList %}<s class="buy__was"><span class="sr-only">Preço anunciado antes: </span>{{ best.listPrice | brl }}</s>{% endif %}
           <p class="buy__row">{{ bigPrice(best.price, 'buy__price') }}{% if best.listOff %}<span class="buy__off">{{ best.listOff | pct }} OFF</span>{% endif %}</p>
-          {% if best.installments %}<p class="buy__inst">{{ best.installments }}</p>{% endif %}
+          {{ payLines(best) }}
           <p class="buy__store">Loja: <b>{{ best.storeName }}</b>{% if best.sellerName %} · vendido por {{ best.sellerName }}{% endif %}</p>
+          <p class="buy__fresh"><span class="buy__fresh-dot" aria-hidden="true"></span>{{ checked(best) }}</p>
           {% if typicalOff and typicalOff >= 0.02 %}<p class="buy__vs">{{ typicalOff | pct }} abaixo do preço típico dos últimos 30 dias ({{ history.typical | brl }})</p>{% endif %}
           <div class="buy__actions">
             <a class="btn btn--primary buy__cta" href="{{ best.href }}" rel="sponsored nofollow noopener">Ir para a loja<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
@@ -54,7 +55,7 @@
           </div>
           {% else %}
           <p class="buy__label">Sem oferta disponível agora</p>
-          <p class="buy__none">Nenhuma das {{ stores.searched }} lojas pesquisadas tem este item à venda neste momento. A próxima coleta sai no minuto 5.</p>
+          <p class="buy__none">Nenhuma das {{ stores.searched }} lojas pesquisadas tem este item à venda neste momento.{% if nextRunAt %} A próxima coleta sai às {{ nextRunAt | hourBR }}.{% endif %}</p>
           <div class="buy__actions"><a class="btn btn--secondary" href="#lojas">Ver a situação em cada loja</a></div>
           {% endif %}
 
@@ -66,8 +67,9 @@
             <div><dt>Maior</dt><dd>{{ history.highest | brl if history.highest else '—' }}</dd></div>
           </dl>
           {% endif %}
-          <p class="buy__note">Preço à vista{% if item.lastRunAt %}, conferido às {{ item.lastRunAt | hourBR }}{% endif %}. Pode mudar na loja até a próxima coleta. Alguns links são de afiliado; o preço para você é o mesmo.</p>
+          <p class="buy__note">Preço à vista{% if item.lastRunAt %}, coleta das {{ item.lastRunAt | hourBR }}{% endif %}. Pode mudar na loja até a próxima coleta{% if collectEvery < 60 %} (a cada {{ collectEvery }} min nesta Black Friday){% endif %}. Alguns links são de afiliado; o preço para você é o mesmo.</p>
         </div>
+        {% if alertBox %}{{ alertForm(alertBox, site.whatsappInvite) }}{% endif %}
       </div>
     </section>
 
@@ -107,11 +109,19 @@
             <ul class="pe-offers">{% for o in r.offers %}{{ offerRow(o) }}{% endfor %}</ul>
           </details>
           {% else %}
-          <p class="st__title">{{ r.best.title }}</p>
+          <p class="st__title">{{ r.best.title }}{% if r.best.productHref %} · <a class="st__prod" href="{{ r.best.productHref }}">mesmo produto em outras lojas</a>{% endif %}</p>
           {% endif %}
         </li>
         {% endfor %}
       </ol>
+      {% endif %}
+
+      {% if catalog.length %}
+      <div class="catalog">
+        <h3 class="stores__subhead">{{ 'O modelo' if catalog.length == 1 else 'Os modelos' }} deste item, pelo código de barras</h3>
+        <p class="catalog__lead">Cada página junta o MESMO produto (mesmo EAN) em todas as lojas, sem adivinhar pelo título.</p>
+        <ul class="catalog__list">{% for p in catalog %}<li><a href="{{ p.href }}">{{ p.name }}</a></li>{% endfor %}</ul>
+      </div>
       {% endif %}
 
       {% if stores.without.length %}
@@ -137,7 +147,7 @@
       <div class="pdp-sec__head pdp-sec__head--split">
         <div>
           <h2 id="hist-h">Histórico de preços</h2>
-          <p>O menor preço entre as lojas, a cada coleta de hora em hora.{% if history.since %} Acompanhado desde {{ history.since | dateBR }}.{% endif %}</p>
+          <p>O menor preço entre as lojas, a cada coleta.{% if history.since %} Acompanhado desde {{ history.since | dateBR }}.{% endif %}</p>
         </div>
         <nav class="ranges" aria-label="Período do histórico">
           {% for r in history.ranges %}<a href="{{ r.href }}"{% if r.active %} aria-current="true" class="is-on"{% endif %}>{{ r.days }} dias</a>{% endfor %}
@@ -177,7 +187,7 @@
       {% else %}
       <div class="hc-empty">
         <p><b>O gráfico se forma a partir da segunda coleta.</b></p>
-        <p>{% if history.since %}Acompanhado desde {{ history.since | dateBR }}{% if history.lowest %}, quando custava {{ history.lowest.price | brl }}{% endif %}. {% endif %}Cada coleta, no minuto 5 de cada hora, acrescenta um ponto. Para a Black Friday, o histórico de algumas semanas é o que mostra se o desconto é de verdade.</p>
+        <p>{% if history.since %}Acompanhado desde {{ history.since | dateBR }}{% if history.lowest %}, quando custava {{ history.lowest.price | brl }}{% endif %}. {% endif %}Cada coleta ({% if collectEvery < 60 %}a cada {{ collectEvery }} minutos nesta Black Friday{% else %}no minuto 5 de cada hora{% endif %}) acrescenta um ponto. Para a Black Friday, o histórico de algumas semanas é o que mostra se o desconto é de verdade.</p>
       </div>
       {% endif %}
 

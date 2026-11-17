@@ -11,6 +11,7 @@ import { median, scoreOffer, type PricePointLite } from './scoring.js'
 import type { RawOffer, StoreContext } from './types.js'
 import { linkOffersToProducts, type CatalogRow } from './catalog.js'
 import { FRESH_MS } from './fresh.js'
+import { processAlerts } from '../services/alerts/notify.js'
 
 /**
  * Uma coleta: para cada loja ativa, busca cada item acompanhado; filtra o que
@@ -205,6 +206,16 @@ async function execute(runId: string, opts: { itemIds?: string[]; log?: (m: stri
       .update({ where: { id: runId }, data: { ...runColumns(stats), status: 'FAILED', finishedAt: new Date(), errors } })
       .catch(() => undefined)
     log(`coleta ${runId}: FALHOU — ${errMessage(err)}`)
+    return
+  }
+
+  // Alertas por e-mail: depois de gravar a coleta, e fora dela — e-mail que
+  // falha não pode marcar a coleta como falha nem atrasar a próxima.
+  try {
+    const sent = await processAlerts({ log })
+    if (sent.notified || sent.failed) log(`alertas: ${sent.notified} e-mails enviados${sent.failed ? `, ${sent.failed} falharam` : ''}`)
+  } catch (err) {
+    log(`alertas: erro — ${errMessage(err)}`)
   }
 }
 

@@ -24,7 +24,7 @@
       {% if c.best %}
       <span class="pc__was">{% if c.best.showList %}<s><span class="sr-only">Preço anunciado antes: </span>{{ c.best.listPrice | brl }}</s>{% endif %}</span>
       <span class="pc__row">{{ bigPrice(c.best.price, 'pc__price') }}{% if c.best.listOff %}<span class="pc__off">{{ c.best.listOff | pct }} OFF</span>{% endif %}</span>
-      {% if c.best.installments %}<span class="pc__inst">{{ c.best.installments }}</span>{% endif %}
+      {% if c.best.pixLower %}<span class="pc__inst">{{ c.best.pixLower | brl }} no Pix</span>{% elif c.best.installments %}<span class="pc__inst">{{ c.best.installments }}</span>{% endif %}
       <span class="pc__store">Menor preço · <b>{{ c.best.storeName }}</b></span>
       <span class="pc__cmp"><span class="pc__cmp-dot" aria-hidden="true"></span>{{ c.storeCount }} {{ 'loja comparada' if c.storeCount == 1 else 'lojas comparadas' }}</span>
       {% if c.flags.length %}<span class="pc__flags">{% for f in c.flags %}{{ chip(f) }}{% endfor %}</span>{% endif %}
@@ -44,7 +44,7 @@
   <div class="pe-offer__text">
     {% if showItem %}<span class="pe-offer__item">{{ o.itemName }}</span>{% endif %}
     <a class="pe-offer__title" href="{{ o.href }}" rel="sponsored nofollow noopener">{{ o.title }}</a>
-    <span class="pe-offer__meta">{{ o.storeName }}{% if o.sellerName %} · vendido por {{ o.sellerName }}{% endif %}{% if o.installments %} · {{ o.installments }}{% endif %}</span>
+    <span class="pe-offer__meta">{{ o.storeName }}{% if o.sellerName %} · vendido por {{ o.sellerName }}{% endif %}{% if o.pixLower %} · {{ o.pixLower | brl }} no Pix{% endif %}{% if o.installments %} · {{ o.installments }}{% endif %}{% if o.productHref %} · <a class="pe-offer__prod" href="{{ o.productHref }}">mesmo produto em outras lojas</a>{% endif %}</span>
     {% if o.flags.length %}<span class="pe-offer__flags">{% for f in o.flags %}{% if loop.index <= 3 %}{{ chip(f) }}{% endif %}{% endfor %}</span>{% endif %}
   </div>
   <div class="pe-offer__price">
@@ -54,4 +54,32 @@
     {% if o.available %}<a class="pe-go" href="{{ o.href }}" rel="sponsored nofollow noopener" aria-label="Ir para a loja {{ o.storeName }}: {{ o.title }}">Ir para a loja</a>{% endif %}
   </div>
 </li>
+{% endmacro %}
+
+{# Preço principal + Pix + cartão. A base da comparação é sempre o preço principal (ver Offer.pixPrice). #}
+{% macro payLines(o, cls='buy') %}
+{% if o.pixLower %}<p class="{{ cls }}__pix"><b>{{ o.pixLower | brl }}</b> no Pix</p>{% elif o.pixIsPrice %}<p class="{{ cls }}__pix">Preço no Pix</p>{% endif %}
+{% if o.cardPrice %}<p class="{{ cls }}__inst">{{ o.cardPrice | brl }} no cartão{% if o.installments %} · {{ o.installments }}{% endif %}</p>{% elif o.installments %}<p class="{{ cls }}__inst">{{ o.installments }}</p>{% endif %}
+{% endmacro %}
+
+{# "Conferido há 12 min": quando o PromoEye viu ESTE preço na loja. Oferta manual não tem esse frescor. #}
+{% macro checked(o) %}{% if o.manual %}Oferta cadastrada à mão{% else %}Preço conferido {{ o.lastSeenAt | ago }}{% endif %}{% endmacro %}
+
+{# "Me avise quando baixar". Funciona sem JavaScript: POST /alertas e volta para cá com a mensagem. #}
+{% macro alertForm(box, whatsappInvite=null) %}
+<section class="alertbox" id="alerta" aria-labelledby="alerta-h">
+  <h2 id="alerta-h" class="alertbox__title">Me avise quando baixar</h2>
+  <p class="alertbox__lead">Um e-mail quando virar promoção de verdade (contra o nosso histórico), ou quando passar do preço que você escolher.</p>
+  {% if box.message %}<p class="alertbox__msg alertbox__msg--{{ box.message.tone }}" role="{{ 'status' if box.message.tone == 'ok' else 'alert' }}">{{ box.message.text }}</p>{% endif %}
+  <form class="alertbox__form" method="post" action="{{ box.action }}">
+    <input type="hidden" name="kind" value="{{ box.kind }}">
+    <input type="hidden" name="slug" value="{{ box.slug }}">
+    <label class="alertbox__field"><span>Seu e-mail</span><input type="email" name="email" required maxlength="160" autocomplete="email" inputmode="email" spellcheck="false"></label>
+    <label class="alertbox__field"><span>Avisar abaixo de <small>(opcional)</small></span><span class="alertbox__money"><span aria-hidden="true">R$</span><input type="text" name="targetPrice" maxlength="20" inputmode="decimal" autocomplete="off" placeholder="{{ box.placeholder }}" aria-label="Preço-alvo em reais (opcional)"></span></label>
+    <div class="alertbox__hp" aria-hidden="true"><label>Deixe em branco <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+    <label class="alertbox__consent"><input type="checkbox" name="consent" required><span>{{ box.consentText }}</span></label>
+    <button class="alertbox__submit" type="submit">Criar alerta</button>
+  </form>
+  <p class="alertbox__fine">Sem a confirmação pelo link do e-mail, nada é enviado. No máximo um aviso a cada 12 horas.{% if whatsappInvite %} Prefere o WhatsApp? <a href="{{ whatsappInvite }}" target="_blank" rel="noopener">Entre no grupo</a>.{% endif %}</p>
+</section>
 {% endmacro %}

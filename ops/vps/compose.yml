@@ -64,6 +64,9 @@ services:
       WAHA_URL: http://waha:3000
       WAHA_API_KEY: ${WAHA_API_KEY:?defina WAHA_API_KEY no .env (o up.sh cria)}
       WAHA_SESSION: default
+      # Alertas "me avise quando baixar" por e-mail. Vazio = desligados (o formulário some).
+      SMTP_URL: ${SMTP_URL:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     networks:
       internal: {}
       whatsapp: {}

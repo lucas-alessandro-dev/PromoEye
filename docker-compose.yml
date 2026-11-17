@@ -46,6 +46,8 @@ services:
       TZ: America/Sao_Paulo
       WAHA_URL: ${WAHA_API_KEY:+http://waha:3000}
       WAHA_API_KEY: ${WAHA_API_KEY:-}
+      SMTP_URL: ${SMTP_URL:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     ports:
       # Só para testar a imagem de produção no seu computador. A VPS usa ops/vps/compose.yml.
       - '127.0.0.1:${APP_PORT:-3010}:3000'
