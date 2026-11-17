@@ -2180,3 +2180,53 @@ img {
 .nowrap {
   white-space: nowrap;
 }
+
+/* ── Catálogo, alertas e verificação de afiliados ────────────────────────── */
+
+.product-thumb-cell {
+  width: 64px;
+}
+
+.product-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-4);
+  min-width: 0;
+}
+
+.offer-pix {
+  color: var(--good-ink);
+  font-weight: 500;
+}
+
+.alert-email {
+  overflow-wrap: anywhere;
+}
+
+.aff-check-title {
+  font-weight: 500;
+  font-size: 1rem;
+  margin: var(--s-4) 0 var(--s-2);
+}
+
+.aff-check-msg {
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.aff-check-url {
+  margin-top: var(--s-1);
+  font-size: 0.8rem;
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .product-thumb-cell {
+    width: 100%;
+  }
+
+  .product-head {
+    flex-direction: column;
+  }
+}

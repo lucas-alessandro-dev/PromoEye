@@ -14,6 +14,7 @@ const FIELD_MESSAGES: Record<string, string> = {
   title: 'Escreva o nome do produto como aparece na loja',
   watchItemId: 'Escolha o item',
   storeId: 'Escolha a loja',
+  gtin: 'EAN inválido: confira os dígitos do código de barras (ou deixe em branco)',
 }
 
 /**
@@ -46,6 +47,7 @@ export function ManualOfferModal({
     price: '',
     listPrice: '',
     sellerName: '',
+    gtin: '',
   })
   const [errors, setErrors] = useState<Errors>({})
   const [formError, setFormError] = useState<string | null>(null)
@@ -60,6 +62,7 @@ export function ManualOfferModal({
       price: moneyInput(form.price),
       listPrice: moneyInput(form.listPrice),
       sellerName: form.sellerName || null,
+      gtin: form.gtin.trim() || null,
     })
     if (!parsed.success) {
       const next: Errors = {}
@@ -159,6 +162,16 @@ export function ManualOfferModal({
             value={form.listPrice}
             onChange={set('listPrice')}
             error={errors.listPrice}
+          />
+          <TextField
+            label="EAN (código de barras, opcional)"
+            inputMode="numeric"
+            placeholder="7891234567895"
+            value={form.gtin}
+            onChange={set('gtin')}
+            error={errors.gtin}
+            hint="Está na ficha técnica da loja. Com ele, a oferta entra no catálogo ao lado das mesmas ofertas das outras lojas."
+            maxLength={20}
           />
           <TextField label="Vendedor (opcional)" value={form.sellerName} onChange={set('sellerName')} error={errors.sellerName} hint="Ex.: Loja oficial Samsung" />
           <TextField

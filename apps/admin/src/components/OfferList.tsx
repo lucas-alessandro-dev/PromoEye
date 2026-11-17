@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import type { OfferDTO } from '@promoeye/shared'
-import { formatBRL, timeAgo } from '@promoeye/shared'
-import { api, errorMessage } from '../api'
+import { formatBRL, normalizeGtin, timeAgo } from '@promoeye/shared'
+import { ApiError, api, errorMessage } from '../api'
 import { useToast } from '../context/toast'
 import { useLoad } from '../lib/hooks'
 import { Badge, Flags, Price, Thumb } from './Deal'
@@ -48,7 +48,7 @@ function OfferRow({
   showItem: boolean
 }) {
   const { toast } = useToast()
-  const [modal, setModal] = useState<null | 'affiliate' | 'history' | 'delete'>(null)
+  const [modal, setModal] = useState<null | 'affiliate' | 'history' | 'delete' | 'gtin'>(null)
   const [busy, setBusy] = useState(false)
 
   const patch = async (input: { pinned?: boolean; hidden?: boolean }, done: string) => {
@@ -118,7 +118,14 @@ function OfferRow({
         </h3>
         <p className="offer-sub">
           {seller && <span>{seller}</span>}
+          {o.pixPrice !== null && o.pixPrice < o.price - 0.005 && <span className="offer-pix">{formatBRL(o.pixPrice)} no Pix</span>}
           {o.installments && <span>{o.installments}</span>}
+          {o.gtin && <span className="num">EAN {o.gtin}</span>}
+          {o.productUrl && (
+            <a href={o.productUrl} target="_blank" rel="noopener">
+              produto no catálogo
+            </a>
+          )}
           {o.promoLabel && <span className="offer-promo">{o.promoLabel}</span>}
           <span>visto {timeAgo(o.lastSeenAt)}</span>
           {o.clicks > 0 && <span>{o.clicks} cliques</span>}
@@ -158,6 +165,9 @@ function OfferRow({
             <button type="button" className="menu-item" onClick={() => setModal('history')}>
               Histórico de preço
             </button>
+            <button type="button" className="menu-item" onClick={() => setModal('gtin')} disabled={busy}>
+              {o.productId ? 'Trocar ou desligar o EAN' : 'Ligar ao EAN'}
+            </button>
             <button type="button" className="menu-item" onClick={() => patch({ pinned: !o.pinned }, o.pinned ? 'Oferta desafixada.' : 'Oferta fixada no topo da vitrine.')} disabled={busy}>
               {o.pinned ? 'Desafixar' : 'Fixar no topo'}
             </button>
@@ -173,6 +183,7 @@ function OfferRow({
 
       {modal === 'affiliate' && <AffiliateModal offer={o} onClose={() => setModal(null)} onSaved={(n) => { onChange(n); setModal(null) }} />}
       {modal === 'history' && <HistoryModal offer={o} onClose={() => setModal(null)} />}
+      {modal === 'gtin' && <GtinModal offer={o} onClose={() => setModal(null)} onSaved={(n) => { onChange(n); setModal(null) }} />}
       {modal === 'delete' && (
         <ConfirmModal title="Excluir oferta?" confirmLabel="Excluir" danger busy={busy} onConfirm={remove} onClose={() => setModal(null)}>
           <p>
@@ -250,6 +261,79 @@ function AffiliateModal({ offer, onClose, onSaved }: { offer: OfferDTO; onClose:
           onChange={(e) => setValue(e.target.value)}
           error={error}
           hint="Quem clicar em “Abrir” na vitrine ou no WhatsApp vai por este link. O clique é contado antes."
+          autoFocus
+        />
+      </form>
+    </Modal>
+  )
+}
+
+/** Liga a oferta ao produto do catálogo pelo EAN (cria o produto se for o primeiro), ou desliga. */
+function GtinModal({ offer, onClose, onSaved }: { offer: OfferDTO; onClose: () => void; onSaved: (o: OfferDTO) => void }) {
+  const { toast } = useToast()
+  const [value, setValue] = useState(offer.gtin ?? '')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const save = async (gtin: string | null) => {
+    if (gtin && !normalizeGtin(gtin)) {
+      setError('EAN inválido: confira os dígitos do código de barras.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await api.linkOfferProduct(offer.id, gtin)
+      toast(gtin ? 'Oferta ligada ao produto do catálogo.' : 'Oferta desligada do catálogo.')
+      onSaved(updated)
+    } catch (err) {
+      setError(err instanceof ApiError && err.issues.length ? (err.issues[0]?.message ?? errorMessage(err)) : errorMessage(err))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      title="EAN desta oferta"
+      onClose={onClose}
+      footer={
+        <>
+          {offer.productId && (
+            <button type="button" className="btn btn-ghost" onClick={() => void save(null)} disabled={busy}>
+              Desligar do catálogo
+            </button>
+          )}
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            Cancelar
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => void save(value.trim() || null)} disabled={busy || !value.trim()}>
+            {busy ? 'Salvando…' : 'Ligar ao EAN'}
+          </button>
+        </>
+      }
+    >
+      <p>
+        Com o EAN, esta oferta aparece na página do produto ao lado das mesmas ofertas das outras lojas. Use para Amazon,
+        KaBuM! e ofertas manuais, que não trazem o código na busca. Se a loja mandar o EAN numa próxima coleta, vale o dela.
+      </p>
+      <p className="muted small">
+        Produto: <a href={offer.url} target="_blank" rel="noopener noreferrer">{offer.title}</a>
+      </p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          void save(value.trim() || null)
+        }}
+      >
+        <TextField
+          label="EAN (código de barras)"
+          inputMode="numeric"
+          placeholder="7891234567895"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          error={error}
+          hint="Está na ficha técnica da loja ou na embalagem: 13 dígitos, em geral."
+          maxLength={20}
           autoFocus
         />
       </form>

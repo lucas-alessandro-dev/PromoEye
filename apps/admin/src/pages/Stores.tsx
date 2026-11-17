@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { formatBRL, timeAgo, type StoreDTO } from '@promoeye/shared'
+import { formatBRL, timeAgo, type AffiliateCheckDTO, type AffiliateCheckRow, type StoreDTO } from '@promoeye/shared'
 import { api, errorMessage, type StorePatch, type StoreTestResult } from '../api'
 import { useToast } from '../context/toast'
 import { useLoad, useTitle } from '../lib/hooks'
@@ -32,6 +32,8 @@ export function Stores() {
 
       {data && (
         <>
+          <AffiliateCheck />
+
           <section aria-labelledby="h-auto">
             <h2 id="h-auto" className="section-title">
               Coleta automática <span className="muted small">({auto.length})</span>
@@ -255,5 +257,148 @@ function StoreTestModal({ store, onClose }: { store: StoreDTO; onClose: () => vo
         )}
       </div>
     </Modal>
+  )
+}
+
+const CHECK_STATUS: Record<AffiliateCheckRow['status'], { label: string; tone: 'good' | 'warn' | 'danger' | 'neutral'; icon: string }> = {
+  ok: { label: 'ok', tone: 'good', icon: '✓' },
+  warn: { label: 'atenção', tone: 'warn', icon: '!' },
+  error: { label: 'quebrado', tone: 'danger', icon: '✕' },
+  none: { label: 'sem afiliado', tone: 'neutral', icon: '·' },
+}
+
+const MODE_LABEL: Record<AffiliateCheckRow['mode'], string> = {
+  none: '—',
+  param: 'parâmetro',
+  wrapper: 'rede',
+  offer: 'link na oferta',
+}
+
+/** Link longo cortado no meio, para caber na linha sem perder o domínio nem o fim. */
+function shortUrl(url: string, max = 90): string {
+  return url.length <= max ? url : `${url.slice(0, max - 30)}…${url.slice(-26)}`
+}
+
+/**
+ * Confere os links de afiliado com uma oferta real de cada loja. Link quebrado
+ * não dá erro na vitrine: só deixa de pagar comissão. Por isso vale rodar
+ * antes da Black Friday e depois de mudar um modelo.
+ */
+function AffiliateCheck() {
+  const [result, setResult] = useState<AffiliateCheckDTO | null>(null)
+  const [busy, setBusy] = useState<null | 'rules' | 'live'>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const run = async (live: boolean) => {
+    setBusy(live ? 'live' : 'rules')
+    setError(null)
+    try {
+      setResult(await api.checkAffiliates(live))
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const all = result ? [...result.rows, ...result.offerLinks] : []
+  const broken = all.filter((r) => r.status === 'error').length
+  const warn = all.filter((r) => r.status === 'warn').length
+
+  return (
+    <section className="card" aria-labelledby="h-aff-check">
+      <div className="card-head">
+        <h2 id="h-aff-check">Links de afiliado</h2>
+        <div className="row-actions">
+          <button type="button" className="btn btn-sm btn-primary" onClick={() => void run(false)} disabled={busy !== null}>
+            {busy === 'rules' ? 'Verificando…' : 'Verificar'}
+          </button>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => void run(true)} disabled={busy !== null}>
+            {busy === 'live' ? 'Seguindo os links…' : 'Verificar ao vivo (segue redirecionamentos)'}
+          </button>
+        </div>
+      </div>
+      <p className="muted small">
+        Monta o link que o /ir/ geraria para uma oferta real de cada loja e confere https, domínio, parâmetro e a tag. Ao vivo, abre
+        cada link sem baixar a página e mostra onde ele foi parar.
+      </p>
+
+      <div aria-live="polite">
+        {busy === 'live' && <Loading label="Seguindo os links das lojas…" />}
+        {error && (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        )}
+        {result && busy === null && (
+          <>
+            <p className={broken ? 'notice notice-warn' : 'notice notice-good'}>
+              {broken
+                ? `${broken} ${broken === 1 ? 'link quebrado' : 'links quebrados'}${warn ? ` e ${warn} com atenção` : ''}. Corrija antes da Black Friday.`
+                : warn
+                  ? `Nenhum link quebrado; ${warn} com atenção.`
+                  : 'Nenhum link quebrado.'}{' '}
+              <span className="small">
+                {result.live ? 'Conferência ao vivo' : 'Só regras'} · {timeAgo(result.checkedAt)}
+              </span>
+            </p>
+            <AffiliateRows title="Modelos das lojas" rows={result.rows} />
+            {result.offerLinks.length > 0 && <AffiliateRows title="Links colados nas ofertas" rows={result.offerLinks} />}
+          </>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function AffiliateRows({ title, rows }: { title: string; rows: AffiliateCheckRow[] }) {
+  return (
+    <>
+      <h3 className="aff-check-title">{title}</h3>
+      <table className="rtable aff-check-table">
+        <thead>
+          <tr>
+            <th scope="col">Situação</th>
+            <th scope="col">Loja</th>
+            <th scope="col">Tipo</th>
+            <th scope="col">O que vimos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const st = CHECK_STATUS[r.status]
+            return (
+              <tr key={`${r.storeId}-${r.sampleOfferId ?? i}`} className={r.status === 'none' ? 'is-muted' : ''}>
+                <td data-label="Situação">
+                  <Badge tone={st.tone}>
+                    <span aria-hidden="true">{st.icon}</span> {st.label}
+                  </Badge>
+                </td>
+                <td data-label="Loja">{r.storeName}</td>
+                <td data-label="Tipo">{MODE_LABEL[r.mode]}</td>
+                <td data-label="O que vimos" className="aff-check-msg">
+                  {r.messages.map((m) => (
+                    <span key={m} className="block">
+                      {m}
+                    </span>
+                  ))}
+                  {r.sampleUrl && r.status !== 'none' && (
+                    <code className="aff-check-url block" title={r.sampleUrl}>
+                      {shortUrl(r.sampleUrl)}
+                    </code>
+                  )}
+                  {r.finalUrl && r.finalUrl !== r.sampleUrl && (
+                    <code className="aff-check-url block" title={r.finalUrl}>
+                      → {shortUrl(r.finalUrl)}
+                      {r.hops !== null && <> ({r.hops} {r.hops === 1 ? 'redirecionamento' : 'redirecionamentos'})</>}
+                    </code>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </>
   )
 }

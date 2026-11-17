@@ -11,6 +11,8 @@ const NAV = [
   { to: '/itens', label: 'Itens' },
   { to: '/ofertas', label: 'Ofertas' },
   { to: '/lojas', label: 'Lojas' },
+  { to: '/catalogo', label: 'Catálogo' },
+  { to: '/alertas', label: 'Alertas' },
   { to: '/whatsapp', label: 'WhatsApp' },
   { to: '/configuracoes', label: 'Configurações' },
 ]

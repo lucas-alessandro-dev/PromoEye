@@ -1,4 +1,6 @@
 import type {
+  AffiliateCheckDTO,
+  AlertsDTO,
   DashboardDTO,
   LoginInput,
   ManualOfferInput,
@@ -10,6 +12,8 @@ import type {
   PreviewResult,
   PreviewRow,
   PricePointDTO,
+  ProductDetailDTO,
+  ProductListDTO,
   RunDTO,
   SenderSettings,
   SettingsDTO,
@@ -201,6 +205,17 @@ export const api = {
   offerHistory: (id: string) => request<PricePointDTO[]>('GET', `/offers/${encodeURIComponent(id)}/history`),
   manualOffer: (input: ManualOfferInput) => request<OfferDTO>('POST', '/offers/manual', input),
   offerMessage: (id: string) => request<MessageDTO>('POST', `/offers/${encodeURIComponent(id)}/message`),
+  /** Liga a oferta ao produto do EAN (cria o produto se for o primeiro); null desliga. */
+  linkOfferProduct: (id: string, gtin: string | null) =>
+    request<OfferDTO>('POST', `/offers/${encodeURIComponent(id)}/product`, { gtin }),
+
+  // Catálogo (produtos por EAN)
+  listProducts: (q: { q?: string; multi?: boolean; limit?: number; offset?: number } = {}) =>
+    request<ProductListDTO>(
+      'GET',
+      `/products${qs({ q: q.q?.trim(), multi: q.multi, limit: q.limit, offset: q.offset || undefined })}`
+    ),
+  getProduct: (id: string) => request<ProductDetailDTO>('GET', `/products/${encodeURIComponent(id)}`),
 
   // Lojas
   stores: () => request<StoreDTO[]>('GET', '/stores'),
@@ -208,6 +223,12 @@ export const api = {
     request<StoreDTO>('PATCH', `/stores/${encodeURIComponent(id)}`, input),
   testStore: (id: string, query: string) =>
     request<StoreTestResult>('POST', `/stores/${encodeURIComponent(id)}/test`, { query }),
+  /** Confere o link de afiliado de cada loja; `live` segue os redirecionamentos de verdade. */
+  checkAffiliates: (live: boolean) => request<AffiliateCheckDTO>('GET', `/affiliates/check?live=${live ? '1' : '0'}`),
+
+  // Alertas de preço (leads da vitrine)
+  listAlerts: () => request<AlertsDTO>('GET', '/alerts'),
+  deleteAlert: (id: string) => request<void>('DELETE', `/alerts/${encodeURIComponent(id)}`),
 
   // WhatsApp
   messages: (status?: MessageDTO['status']) => request<MessageDTO[]>('GET', `/messages${qs({ status })}`),
@@ -230,6 +251,9 @@ export const api = {
   settings: () => request<SettingsDTO>('GET', '/settings'),
   saveSettings: (input: SettingsInput) => request<SettingsDTO>('PUT', '/settings', input),
 }
+
+/** Download direto (link comum, o cookie da sessão autentica): só os alertas confirmados e ativos. */
+export const ALERTS_CSV_URL = '/api/admin/alerts.csv'
 
 /** Mensagem legível de qualquer erro. */
 export function errorMessage(err: unknown): string {

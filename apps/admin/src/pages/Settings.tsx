@@ -194,6 +194,21 @@ export function Settings() {
           </div>
         </section>
 
+        <section className="card" aria-labelledby="h-alerts">
+          <h2 id="h-alerts">Alertas por e-mail</h2>
+          <Switch
+            label="Alertas por e-mail na vitrine"
+            checked={form.alerts.enabled}
+            onChange={(v) => setForm((f) => (f ? { ...f, alerts: { ...f.alerts, enabled: v } } : f))}
+            hint={
+              <>
+                Mostra “Me avise quando baixar” nas páginas de item e de produto. Só aparece com o e-mail de saída configurado
+                (SMTP_URL e SMTP_FROM no .env). Inscritos e exportação ficam em <Link to="/alertas">Alertas</Link>.
+              </>
+            }
+          />
+        </section>
+
         {formError && (
           <p className="field-error" role="alert">
             {formError}

@@ -13,6 +13,8 @@ import { Offers } from './pages/Offers'
 import { Stores } from './pages/Stores'
 import { WhatsApp } from './pages/WhatsApp'
 import { Settings } from './pages/Settings'
+import { ProductDetail, Products } from './pages/Products'
+import { Alerts } from './pages/Alerts'
 
 function Gate() {
   const { user, loading } = useAuth()
@@ -29,6 +31,9 @@ function Gate() {
           <Route path="itens/:id/editar" element={<ItemForm />} />
           <Route path="ofertas" element={<Offers />} />
           <Route path="lojas" element={<Stores />} />
+          <Route path="catalogo" element={<Products />} />
+          <Route path="catalogo/:id" element={<ProductDetail />} />
+          <Route path="alertas" element={<Alerts />} />
           <Route path="whatsapp" element={<WhatsApp />} />
           <Route path="configuracoes" element={<Settings />} />
           <Route
