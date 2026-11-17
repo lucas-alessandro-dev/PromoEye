@@ -7,6 +7,7 @@ import {
   testSendInput,
   type WhatsAppStatusDTO,
 } from '@promoeye/shared'
+import { inWindow, quietOffWindow, windowDTO } from '../../lib/peak.js'
 import { prisma } from '../../lib/prisma.js'
 import { parse } from '../../lib/validate.js'
 import { messageDTO } from '../../services/dto.js'
@@ -135,8 +136,13 @@ export async function statusDTO(): Promise<WhatsAppStatusDTO> {
     prisma.outboundMessage.count({ where: { status: 'FAILED' } }),
     prisma.outboundMessage.count({ where: { status: 'SENT', sentAt: { gte: since } } }),
   ])
-  const quietNow = settings.quietHours && inQuietHours(hourInSaoPaulo(), settings.quietStart, settings.quietEnd)
-  const base = { settings, queue: { queued, failed, sentLastHour }, quietNow, phone: null, pushName: null, error: null }
+  const now = new Date()
+  const quietNow =
+    settings.quietHours &&
+    !inWindow(quietOffWindow, now) &&
+    inQuietHours(hourInSaoPaulo(now), settings.quietStart, settings.quietEnd)
+  const quietOff = windowDTO(quietOffWindow, now)
+  const base = { settings, queue: { queued, failed, sentLastHour }, quietNow, quietOff, phone: null, pushName: null, error: null }
 
   if (!wahaConfigured()) return { ...base, state: 'UNCONFIGURED', ready: false }
   try {

@@ -237,11 +237,21 @@ export interface RunDTO {
   errors: { store?: string; item?: string; message: string }[]
 }
 
+/** Janela com data marcada (Black Friday), valendo agora ou por vir. */
+export interface TimeWindowDTO {
+  from: string
+  until: string
+  /** Estamos dentro dela agora. */
+  active: boolean
+}
+
 export interface DashboardDTO {
   lastRun: RunDTO | null
   running: boolean
   nextRunAt: string | null
   scheduleEnabled: boolean
+  /** Coleta mais frequente (PEAK_* no .env). null = nenhuma por vir. */
+  peak: (TimeWindowDTO & { everyMin: number }) | null
   counts: {
     items: number
     activeItems: number
@@ -339,6 +349,8 @@ export interface WhatsAppStatusDTO {
   queue: { queued: number; failed: number; sentLastHour: number }
   /** Agora é horário de silêncio: a fila não anda. */
   quietNow: boolean
+  /** Janela em que o horário de silêncio fica suspenso (QUIET_OFF_* no .env). null = nenhuma por vir. */
+  quietOff: TimeWindowDTO | null
   /** Conectado e com grupo escolhido: dá para enviar. */
   ready: boolean
 }

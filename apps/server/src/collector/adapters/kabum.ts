@@ -1,4 +1,4 @@
-import { httpGetJson } from '../../lib/http.js'
+import { HttpStatusError, httpGetJson } from '../../lib/http.js'
 import type { RawOffer, StoreAdapter } from '../types.js'
 
 /**
@@ -70,15 +70,34 @@ export function mapKabumProducts(products: KabumProduct[]): RawOffer[] {
   return out
 }
 
+/**
+ * Busca sem resultado: a API responde 404 com o código CATALOG_NOT_MATCH em
+ * vez de uma lista vazia. É "a KaBuM não vende isso", não uma falha.
+ */
+export function isKabumNoMatch(err: unknown): boolean {
+  if (!(err instanceof HttpStatusError) || err.status !== 404) return false
+  try {
+    const data = JSON.parse(err.body) as { errors?: { code?: string }[] }
+    return data.errors?.some((e) => e.code === 'CATALOG_NOT_MATCH') ?? false
+  } catch {
+    return false
+  }
+}
+
 export function kabumAdapter(): StoreAdapter {
   return {
     async search(query, opts) {
       const url = `${API}?query=${encodeURIComponent(query)}&page_size=${opts.limit}&page_number=1&facet_filters=&sort=most_searched&include=gift`
-      const data = await httpGetJson<{ data?: KabumProduct[] }>(url, {
-        signal: opts.signal,
-        headers: { Origin: 'https://www.kabum.com.br', Referer: 'https://www.kabum.com.br/' },
-      })
-      return mapKabumProducts(data.data ?? [])
+      try {
+        const data = await httpGetJson<{ data?: KabumProduct[] }>(url, {
+          signal: opts.signal,
+          headers: { Origin: 'https://www.kabum.com.br', Referer: 'https://www.kabum.com.br/' },
+        })
+        return mapKabumProducts(data.data ?? [])
+      } catch (err) {
+        if (isKabumNoMatch(err)) return []
+        throw err
+      }
     },
   }
 }

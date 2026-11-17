@@ -221,6 +221,12 @@ describe('pode enviar agora?', () => {
   it('silêncio desligado deixa enviar de madrugada', () => {
     expect(blockedNow({ ...base, now: new Date('2026-11-16T06:00:00Z'), sender: { ...sender, quietHours: false } })).toBeNull()
   })
+  it('na janela sem silêncio (virada da Black Friday) sai de madrugada, mas o limite por hora continua', () => {
+    const midnight = new Date('2026-11-27T03:05:00Z') // 00:05 em Brasília
+    expect(blockedNow({ ...base, now: midnight, lastSentAt: null })).toMatch(/silêncio/)
+    expect(blockedNow({ ...base, now: midnight, lastSentAt: null, quietOff: true })).toBeNull()
+    expect(blockedNow({ ...base, now: midnight, lastSentAt: null, quietOff: true, sentLastHour: 10 })).toMatch(/limite/)
+  })
 })
 
 describe('a mensagem ainda vale?', () => {

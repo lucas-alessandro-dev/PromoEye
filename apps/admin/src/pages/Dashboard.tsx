@@ -17,7 +17,8 @@ export function Dashboard() {
   if (error && !data) return <ErrorBox error={error} onRetry={reload} />
   if (!data) return null
 
-  const { lastRun, nextRunAt, scheduleEnabled, counts, topDeals, stores, whatsapp } = data
+  const { lastRun, nextRunAt, scheduleEnabled, peak, counts, topDeals, stores, whatsapp } = data
+  const cadence = peak?.active ? `a cada ${peak.everyMin} min` : 'de hora em hora'
   const waDown = whatsapp.autoSend && whatsapp.state !== 'WORKING'
 
   return (
@@ -52,12 +53,22 @@ export function Dashboard() {
             nextRunAt ? (
               <>
                 <p className="big-number">{formatTime(nextRunAt)}</p>
-                <p className="muted">{formatDateTime(nextRunAt)} · de hora em hora</p>
+                <p className="muted">
+                  {formatDateTime(nextRunAt)} · {cadence}
+                </p>
               </>
             ) : (
-              <p className="muted">Agendada de hora em hora.</p>
+              <p className="muted">Agendada {cadence}.</p>
             )
-          ) : (
+          ) : null}
+          {scheduleEnabled && peak ? (
+            <p className="muted small">
+              {peak.active
+                ? `Black Friday: a cada ${peak.everyMin} min até ${formatDateTime(peak.until)}.`
+                : `Black Friday: a cada ${peak.everyMin} min de ${formatDateTime(peak.from)} a ${formatDateTime(peak.until)}.`}
+            </p>
+          ) : null}
+          {scheduleEnabled ? null : (
             <p className="muted">
               A busca automática está desligada neste servidor (<code>COLLECT_ENABLED=false</code>). “Buscar agora” continua
               funcionando.

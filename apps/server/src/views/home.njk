@@ -11,7 +11,7 @@
     <header class="shop-head">
       <div class="shop-head__text">
         <h1>Menores preços de hoje</h1>
-        <p>{{ shop.total }} {{ 'item' if shop.total == 1 else 'itens' }} em {{ counts.autoStores }} lojas confiáveis, conferidos de hora em hora{% if lastRunAt %} · atualizado às {{ lastRunAt | hourBR }}{% endif %} · Black Friday {% if bf.days == 0 %}é hoje{% elif bf.days == 1 %}é amanhã{% else %}em {{ bf.days }} dias{% endif %}</p>
+        <p>{{ shop.total }} {{ 'item' if shop.total == 1 else 'itens' }} em {{ counts.autoStores }} lojas confiáveis, conferidos {% if collectEvery < 60 %}a cada {{ collectEvery }} minutos{% else %}de hora em hora{% endif %}{% if lastRunAt %} · atualizado às {{ lastRunAt | hourBR }}{% endif %} · Black Friday {% if bf.days == 0 %}é hoje{% elif bf.days == 1 %}é amanhã{% else %}em {{ bf.days }} dias{% endif %}</p>
       </div>
       <form class="shop-search" role="search" method="get" action="/#ofertas">
         <label class="sr-only" for="busca">Buscar entre os itens</label>
@@ -220,7 +220,7 @@
       </div>
       <div class="faq span-6 start-7">
         <div class="faq__item"><h3>O {{ site.title }} vende alguma coisa?</h3><p>Não. O clique leva você à loja, e a compra é feita lá. Alguns links são de afiliado: a loja pode pagar comissão ao <span translate="no">{{ site.title }}</span>, e o preço para você é o mesmo.</p></div>
-        <div class="faq__item"><h3>De quanto em quanto tempo o preço muda aqui?</h3><p>De hora em hora, no minuto 5.{% if lastRunAt %} A última coleta foi às {{ lastRunAt | hourBR }}.{% endif %} O preço na loja pode mudar entre uma coleta e outra.</p></div>
+        <div class="faq__item"><h3>De quanto em quanto tempo o preço muda aqui?</h3><p>{% if collectEvery < 60 %}Nesta Black Friday, a cada {{ collectEvery }} minutos.{% else %}De hora em hora, no minuto 5.{% endif %}{% if lastRunAt %} A última coleta foi às {{ lastRunAt | hourBR }}.{% endif %} O preço na loja pode mudar entre uma coleta e outra.</p></div>
         <div class="faq__item"><h3>Quais lojas entram?</h3><p>{{ counts.autoStores }} automaticamente, entre grandes varejistas e lojas oficiais de fabricantes.{% if manualStores.length %} {{ manualStores | join(', ') }} bloqueiam robôs, então as ofertas delas entram à mão.{% endif %}</p></div>
         <div class="faq__item"><h3>Aparece vendedor de marketplace?</h3><p>Só os de uma lista de confiáveis, como Magazine Luiza, Fast Shop e iPlace vendendo na Americanas. Vendedor desconhecido fica de fora.</p></div>
         <div class="faq__item"><h3>Como receber as promoções no WhatsApp?</h3><p>{% if site.whatsappInvite %}Pelo grupo: <a class="link" href="{{ site.whatsappInvite }}" rel="noopener">Entrar no grupo do WhatsApp</a>{% else %}O grupo está sendo preparado. Ele vai receber só as promoções de verdade, com o link de cada uma.{% endif %}</p></div>

@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { formatPhone, senderSettingsInput, type SenderSettings, type WhatsAppStatusDTO } from '@promoeye/shared'
 import { ApiError, api, errorMessage } from '../api'
 import { useToast } from '../context/toast'
+import { formatDateTime } from '../lib/format'
 import { useLoad } from '../lib/hooks'
 import { Badge } from './Deal'
 import { SelectField, Switch, TextField } from './Fields'
@@ -319,6 +320,9 @@ function Connected({ status, onStatus }: { status: WhatsAppStatusDTO; onStatus: 
         {q.queued} na fila · {q.sentLastHour} enviada{q.sentLastHour === 1 ? '' : 's'} na última hora (limite {s.maxPerHour})
         {q.failed > 0 && <> · {q.failed} com erro</>}
         {status.quietNow && <> · horário de silêncio agora: a fila volta a andar às {hh(s.quietEnd)}</>}
+        {status.quietOff?.active && s.quietHours && (
+          <> · Black Friday: horário de silêncio suspenso até {formatDateTime(status.quietOff.until)}</>
+        )}
         {s.autoSend && !s.groupId && <> · escolha o grupo para o envio começar</>}
       </p>
 
@@ -409,7 +413,12 @@ function Connected({ status, onStatus }: { status: WhatsAppStatusDTO; onStatus: 
               label="Horário de silêncio"
               checked={form.quietHours}
               onChange={(v) => set('quietHours', v)}
-              hint="Nesse intervalo nada sai (horário de Brasília). Promoção que surgir fica na fila e sai depois, se o preço continuar valendo."
+              hint={
+                'Nesse intervalo nada sai (horário de Brasília). Promoção que surgir fica na fila e sai depois, se o preço continuar valendo.' +
+                (status.quietOff
+                  ? ` Na Black Friday o silêncio fica suspenso de ${formatDateTime(status.quietOff.from)} a ${formatDateTime(status.quietOff.until)} (QUIET_OFF_* no servidor).`
+                  : '')
+              }
             />
           </div>
           {form.quietHours && (

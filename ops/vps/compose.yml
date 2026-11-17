@@ -49,6 +49,15 @@ services:
       COLLECT_ENABLED: ${COLLECT_ENABLED:-true}
       COLLECT_STORE_DELAY_MS: ${COLLECT_STORE_DELAY_MS:-1500}
       COLLECT_TIMEOUT_MS: ${COLLECT_TIMEOUT_MS:-15000}
+      # Black Friday 2026 (sexta, 27/11). Coleta a cada 20 min de quinta 18h a
+      # domingo 0h, e o WhatsApp sem horário de silêncio na virada (as lojas
+      # abrem à meia-noite). Passadas as datas, não fazem nada. Para mudar,
+      # defina no .env; com o valor vazio (PEAK_FROM= e PEAK_UNTIL=) desliga.
+      PEAK_FROM: ${PEAK_FROM-2026-11-26T18:00:00-03:00}
+      PEAK_UNTIL: ${PEAK_UNTIL-2026-11-29T00:00:00-03:00}
+      PEAK_EVERY_MIN: ${PEAK_EVERY_MIN:-20}
+      QUIET_OFF_FROM: ${QUIET_OFF_FROM-2026-11-26T22:00:00-03:00}
+      QUIET_OFF_UNTIL: ${QUIET_OFF_UNTIL-2026-11-27T08:00:00-03:00}
       # Um salto só: o Caddy.
       TRUST_PROXY: 'true'
       TZ: America/Sao_Paulo

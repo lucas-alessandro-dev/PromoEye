@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { parseAmazonSearch } from '../apps/server/src/collector/adapters/amazon.js'
-import { mapKabumProducts } from '../apps/server/src/collector/adapters/kabum.js'
+import { isKabumNoMatch, mapKabumProducts } from '../apps/server/src/collector/adapters/kabum.js'
 import { mapVtexProducts } from '../apps/server/src/collector/adapters/vtex.js'
-import { BlockedError } from '../apps/server/src/lib/http.js'
+import { BlockedError, HttpStatusError } from '../apps/server/src/lib/http.js'
 
 /** Recortes das respostas reais de 16/11/2026, só com os campos usados. */
 
@@ -106,6 +106,15 @@ describe('KaBuM!', () => {
       },
     ])
     expect(o).toMatchObject({ price: 90, promoLabel: null, soldByStore: false, sellerName: 'UP DISTRIBUIDORA' })
+  })
+
+  it('404 CATALOG_NOT_MATCH é busca vazia, não erro (resposta real de 17/11/2026)', () => {
+    const noMatch = '{"errors":[{"code":"CATALOG_NOT_MATCH","detail":"No matching data have been found."}]}'
+    expect(isKabumNoMatch(new HttpStatusError(404, noMatch))).toBe(true)
+    // Qualquer outro 404 ou erro continua sendo erro.
+    expect(isKabumNoMatch(new HttpStatusError(404, '<html>Not Found</html>'))).toBe(false)
+    expect(isKabumNoMatch(new HttpStatusError(500, noMatch))).toBe(false)
+    expect(isKabumNoMatch(new Error('HTTP 404'))).toBe(false)
   })
 })
 

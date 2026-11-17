@@ -37,6 +37,11 @@ services:
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-24}
       COLLECT_CRON: ${COLLECT_CRON:-5 * * * *}
       COLLECT_ENABLED: 'true'
+      PEAK_FROM: ${PEAK_FROM:-}
+      PEAK_UNTIL: ${PEAK_UNTIL:-}
+      PEAK_EVERY_MIN: ${PEAK_EVERY_MIN:-20}
+      QUIET_OFF_FROM: ${QUIET_OFF_FROM:-}
+      QUIET_OFF_UNTIL: ${QUIET_OFF_UNTIL:-}
       TRUST_PROXY: 'true'
       TZ: America/Sao_Paulo
       WAHA_URL: ${WAHA_API_KEY:+http://waha:3000}

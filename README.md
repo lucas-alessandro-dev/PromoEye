@@ -4,7 +4,7 @@ Confere de hora em hora o preço dos itens que você escolhe, em lojas confiáve
 
 - **Vitrine**: `/`, uma listagem no jeito das grandes lojas (busca, categorias, "só promoções", ordenação, um cartão por item com o menor preço). Cada cartão abre `/ofertas/<slug>`: fotos, caixa de compra, **todas as lojas pesquisadas** com a situação de cada uma (preço, esgotado, não encontrado, não respondeu, manual) e o **histórico** do menor preço em 7, 30 ou 90 dias.
 - **Painel**: `/painel`, para itens, ofertas, lojas, afiliados, WhatsApp e configurações.
-- **Coletor**: roda dentro do servidor, no minuto 5 de cada hora (`COLLECT_CRON`).
+- **Coletor**: roda dentro do servidor, no minuto 5 de cada hora (`COLLECT_CRON`). Na Black Friday, a cada 20 min, e o WhatsApp sem horário de silêncio na virada: [docs/deploy-vps.md](docs/deploy-vps.md#black-friday-26-a-29112026).
 - **Redirecionamento**: `/ir/<id>`. Todo clique para a loja passa por aqui, que aplica o afiliado e conta o clique (sem guardar IP).
 
 ## Rodar no computador

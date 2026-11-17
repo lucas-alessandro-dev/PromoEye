@@ -5,6 +5,7 @@ import { prisma } from '../../lib/prisma.js'
 import { parse } from '../../lib/validate.js'
 import { AlreadyRunningError, currentRun, FRESH_MS, startCollection } from '../../collector/run.js'
 import { nextRunAt, scheduleEnabled } from '../../collector/scheduler.js'
+import { peakEveryMin, peakWindow, windowDTO } from '../../lib/peak.js'
 import { offerDTO, runDTO, storeDTO } from '../../services/dto.js'
 import { getSenderSettings } from '../../services/settings.js'
 import { stateOf, waha, wahaConfigured } from '../../services/whatsapp/waha.js'
@@ -13,6 +14,11 @@ import { stateOf, waha, wahaConfigured } from '../../services/whatsapp/waha.js'
  * Com o envio automático ligado, o painel avisa se o WhatsApp caiu — senão as
  * promoções param na fila sem ninguém ver. O WAHA tem 3 s para responder.
  */
+function peakDTO(): DashboardDTO['peak'] {
+  const w = windowDTO(peakWindow)
+  return w && { ...w, everyMin: peakEveryMin }
+}
+
 async function whatsappSummary(): Promise<DashboardDTO['whatsapp']> {
   const sender = await getSenderSettings()
   if (!sender.autoSend) return { autoSend: false, state: null }
@@ -58,6 +64,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       running: currentRun() !== null,
       nextRunAt: nextRunAt()?.toISOString() ?? null,
       scheduleEnabled: scheduleEnabled(),
+      peak: peakDTO(),
       counts: { items, activeItems, offers, deals, draftMessages: drafts, queuedMessages: queued, clicks7d },
       topDeals: topDeals.map(offerDTO),
       stores: stores.map(storeDTO),

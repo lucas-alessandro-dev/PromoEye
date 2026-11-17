@@ -8,6 +8,17 @@ export class BlockedError extends Error {
   }
 }
 
+/** A loja respondeu com erro HTTP. Leva o corpo para o adaptador poder ler o motivo. */
+export class HttpStatusError extends Error {
+  constructor(
+    readonly status: number,
+    readonly body: string
+  ) {
+    super(`HTTP ${status}`)
+    this.name = 'HttpStatusError'
+  }
+}
+
 export interface FetchOptions {
   accept?: 'json' | 'html'
   timeoutMs?: number
@@ -48,15 +59,17 @@ export async function httpGet(url: string, opts: FetchOptions = {}): Promise<{ s
         throw new BlockedError(`a loja recusou a requisição (HTTP ${res.status})`)
       }
       if (res.status >= 500 && attempt === 0) {
-        lastErr = new Error(`HTTP ${res.status}`)
+        lastErr = new HttpStatusError(res.status, body)
         await sleep(1200)
         continue
       }
       // VTEX responde 206 (Partial Content) com a página de resultados.
-      if (res.status >= 400) throw new Error(`HTTP ${res.status}`)
+      if (res.status >= 400) throw new HttpStatusError(res.status, body)
       return { status: res.status, body }
     } catch (err) {
       if (err instanceof BlockedError || opts.signal?.aborted) throw err
+      // 4xx é resposta, não falha passageira: repetir dá o mesmo resultado.
+      if (err instanceof HttpStatusError && err.status < 500) throw err
       lastErr = err
       if (attempt === 0) await sleep(1200)
     } finally {

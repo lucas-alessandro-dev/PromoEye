@@ -36,6 +36,19 @@ bash ops/vps/deploy.sh
 
 Ele envia o código da pasta, commitado ou não, respeitando o `.gitignore`, então o `.env` local não sobe. Depois reconstrói a imagem, sobe o container, aplica as migrações (`ops/entrypoint.sh`) e espera o `/healthz` responder.
 
+## Black Friday (26 a 29/11/2026)
+
+Já vem configurada no `ops/vps/compose.yml`, sem mexer no `.env`:
+
+| O quê | Quando | Variáveis |
+|---|---|---|
+| Coleta a cada 20 min (no minuto 5, 25 e 45) em vez de a cada hora | qui 26/11 18:00 → dom 29/11 00:00 | `PEAK_FROM`, `PEAK_UNTIL`, `PEAK_EVERY_MIN` |
+| WhatsApp sem horário de silêncio (as lojas abrem à meia-noite) | qui 26/11 22:00 → sex 27/11 08:00 | `QUIET_OFF_FROM`, `QUIET_OFF_UNTIL` |
+
+O limite por hora e o intervalo de 1 minuto entre mensagens continuam valendo. O Painel mostra as duas janelas: na "Próxima coleta" e no envio automático do WhatsApp.
+
+Para mudar, ponha a variável no `.env` da VPS (data ISO com fuso, como `2026-11-26T18:00:00-03:00`) e rode o `up.sh`. Para desligar uma janela, deixe as duas pontas vazias (`PEAK_FROM=` e `PEAK_UNTIL=`). Depois das datas, nada muda: o horário volta ao normal sozinho.
+
 ## Primeira instalação (já feita)
 
 ```bash

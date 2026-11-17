@@ -4,6 +4,7 @@ import type { FastifyBaseLogger } from 'fastify'
 import { FRESH_MS } from '../../collector/run.js'
 import { config } from '../../config.js'
 import { sleep } from '../../lib/http.js'
+import { inWindow, quietOffWindow } from '../../lib/peak.js'
 import { num, numReq, prisma } from '../../lib/prisma.js'
 import { getSenderSettings } from '../settings.js'
 import { imageForWhatsApp, waha, wahaConfigured, WahaError } from './waha.js'
@@ -41,10 +42,14 @@ export function blockedNow(input: {
   sentLastHour: number
   lastSentAt: Date | null
   gapMs: number
+  /** Dentro da janela QUIET_OFF_* (Black Friday): o horário de silêncio não vale. */
+  quietOff?: boolean
 }): string | null {
   const { now, sender } = input
   if (!sender.groupId) return 'nenhum grupo escolhido'
-  if (sender.quietHours && inQuietHours(hourInSaoPaulo(now), sender.quietStart, sender.quietEnd)) return 'horário de silêncio'
+  if (sender.quietHours && !input.quietOff && inQuietHours(hourInSaoPaulo(now), sender.quietStart, sender.quietEnd)) {
+    return 'horário de silêncio'
+  }
   if (input.sentLastHour >= sender.maxPerHour) return `limite de ${sender.maxPerHour} por hora`
   if (input.lastSentAt && now.getTime() - input.lastSentAt.getTime() < input.gapMs) return 'intervalo entre mensagens'
   return null
@@ -200,7 +205,8 @@ async function tick(log: FastifyBaseLogger): Promise<void> {
     prisma.outboundMessage.count({ where: { status: 'SENT', sentAt: { gte: new Date(now.getTime() - HOUR) } } }),
     prisma.outboundMessage.findFirst({ where: { status: 'SENT', sentAt: { not: null } }, orderBy: { sentAt: 'desc' } }),
   ])
-  if (blockedNow({ now, sender, sentLastHour, lastSentAt: last?.sentAt ?? null, gapMs })) return
+  const quietOff = inWindow(quietOffWindow, now)
+  if (blockedNow({ now, sender, sentLastHour, lastSentAt: last?.sentAt ?? null, gapMs, quietOff })) return
 
   const session = await waha().getSession().catch(() => null)
   if (session?.status !== 'WORKING') return

@@ -8,6 +8,7 @@ import { normalize } from '../lib/text.js'
 import { currentUser } from '../plugins/auth.js'
 import { FRESH_MS } from '../collector/run.js'
 import { nextRunAt } from '../collector/scheduler.js'
+import { collectEveryMin } from '../lib/peak.js'
 import { typicalPrice } from '../collector/scoring.js'
 import { getSettings } from '../services/settings.js'
 
@@ -121,6 +122,8 @@ async function baseContext() {
     bf: { days: bf.days, date: bf.date },
     lastRunAt: lastRun?.finishedAt ?? lastRun?.startedAt ?? null,
     nextRunAt: nextRunAt(),
+    // 60 = de hora em hora; menos que isso só na janela de pico (Black Friday).
+    collectEvery: collectEveryMin(),
     year: new Date().getFullYear(),
   }
 }

@@ -2,6 +2,17 @@ import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { z } from 'zod'
 
+/** Data e hora ISO com fuso explícito (2026-11-26T18:00:00-03:00). Vazio = não definido. */
+const isoDateTime = z
+  .string()
+  .trim()
+  .default('')
+  .refine(
+    (v) => v === '' || (/(Z|[+-]\d{2}:\d{2})$/.test(v) && !Number.isNaN(Date.parse(v))),
+    'use data e hora ISO com fuso, ex.: 2026-11-26T18:00:00-03:00'
+  )
+  .transform((v) => (v ? new Date(v) : null))
+
 /** Falhar no boot é melhor do que descobrir em produção que faltou um segredo. */
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -20,6 +31,20 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   COLLECT_STORE_DELAY_MS: z.coerce.number().int().min(0).max(60_000).default(1500),
   COLLECT_TIMEOUT_MS: z.coerce.number().int().min(2000).max(120_000).default(15_000),
+  /**
+   * Janela de pico (Black Friday): entre PEAK_FROM e PEAK_UNTIL a coleta roda
+   * a cada PEAK_EVERY_MIN minutos (no minuto 5, 25, 45… como o horário
+   * normal) no lugar do COLLECT_CRON. Os dois vazios = sem janela.
+   */
+  PEAK_FROM: isoDateTime,
+  PEAK_UNTIL: isoDateTime,
+  PEAK_EVERY_MIN: z.enum(['10', '15', '20', '30']).default('20').transform(Number),
+  /**
+   * Entre QUIET_OFF_FROM e QUIET_OFF_UNTIL o WhatsApp ignora o horário de
+   * silêncio: a Black Friday abre à meia-noite. Os dois vazios = nunca.
+   */
+  QUIET_OFF_FROM: isoDateTime,
+  QUIET_OFF_UNTIL: isoDateTime,
   /** Quantos resultados pedir por loja em cada busca. */
   COLLECT_RESULTS_PER_STORE: z.coerce.number().int().min(4).max(50).default(24),
   /**
@@ -67,6 +92,16 @@ function load() {
   const env = envSchema.superRefine((v, ctx) => {
     if (v.WAHA_URL && !v.WAHA_API_KEY) {
       ctx.addIssue({ code: 'custom', path: ['WAHA_API_KEY'], message: 'com WAHA_URL definido, a chave do WAHA é obrigatória' })
+    }
+    const windows = [
+      ['PEAK_FROM', 'PEAK_UNTIL'],
+      ['QUIET_OFF_FROM', 'QUIET_OFF_UNTIL'],
+    ] as const
+    for (const [a, b] of windows) {
+      const from = v[a]
+      const until = v[b]
+      if (!from !== !until) ctx.addIssue({ code: 'custom', path: [from ? b : a], message: `defina ${a} e ${b} juntos` })
+      else if (from && until && until <= from) ctx.addIssue({ code: 'custom', path: [b], message: `${b} precisa ser depois de ${a}` })
     }
   })
   const parsed = env.safeParse(process.env)
