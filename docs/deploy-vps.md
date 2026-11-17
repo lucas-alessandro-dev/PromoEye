@@ -68,9 +68,37 @@ ssh -t vps 'cd /srv/apps/promoeye && docker compose exec app npm run create-admi
 
 Hoje o endereço é provisório: `promoeye.187-53-119-70.sslip.io`. O sslip.io devolve o IP que está no próprio nome, então funciona sem configurar DNS.
 
-1. No registro do domínio, crie um registro **A** apontando para `187.53.119.70`.
-2. `ssh vps nano /srv/apps/promoeye/.env` e troque o `PUBLIC_URL`.
+1. No registro do domínio, crie um registro **A** apontando para `187.53.119.70` (e outro para `www`, se for usar). Espere o DNS responder: `nslookup promoeye.com.br` precisa devolver o IP da VPS, senão o Caddy não consegue o certificado.
+2. `ssh vps nano /srv/apps/promoeye/.env`:
+   - troque o `PUBLIC_URL` pelo endereço novo (`https://promoeye.com.br`);
+   - acrescente `PUBLIC_URL_ALIASES=promoeye.187-53-119-70.sslip.io,www.promoeye.com.br`. Esses endereços passam a responder com **301 para o novo, mantendo o caminho**. Os links `/ir/...` que já foram para o grupo do WhatsApp continuam contando clique e aplicando o afiliado, e o que o Google indexou passa para o domínio novo.
 3. `ssh vps sh /srv/apps/promoeye/src/ops/vps/up.sh`. O Caddy é reconfigurado e emite o certificado sozinho.
+4. Confira:
+   - `curl -sI https://promoeye.187-53-119-70.sslip.io/ofertas/qualquer` precisa responder `301` com `location: https://promoeye.com.br/ofertas/qualquer`;
+   - a vitrine abre no domínio novo, e uma mensagem nova do WhatsApp sai com o link novo;
+   - `ssh -t vps 'cd /srv/apps/promoeye && docker compose exec app npm run check:affiliates -- --live'` não mostra nenhum link quebrado;
+   - em **Painel › Configurações**, ligue "Deixar o Google indexar" só depois do domínio definitivo. Antes disso o `robots.txt` bloqueia tudo de propósito.
+
+## Alertas por e-mail (SMTP)
+
+O formulário "me avise quando baixar" só aparece com SMTP configurado. No `.env` da VPS:
+
+```
+SMTP_URL=smtps://usuario:senha@smtp-relay.brevo.com:465
+SMTP_FROM="PromoEye <alertas@promoeye.com.br>"
+```
+
+Qualquer provedor serve (Brevo, Amazon SES, Resend, Mailgun). Autorize o domínio do remetente no provedor (registros SPF e DKIM no DNS), senão os e-mails caem no spam. Depois rode o `up.sh`. Em **Painel › Alertas** aparecem os inscritos, a exportação em CSV e o botão de apagar (pedido de exclusão).
+
+## Links de afiliado
+
+Antes de um dia de pico, confira se todo link de afiliado ainda paga comissão:
+
+```bash
+ssh -t vps 'cd /srv/apps/promoeye && docker compose exec app npm run check:affiliates -- --live'
+```
+
+O comando monta o link do `/ir/` para uma oferta real de cada loja e confere https, domínio, parâmetro e o formato da tag (Amazon: `-20`). Com `--live`, também segue os redirecionamentos. O mesmo está em **Painel › Lojas › Links de afiliado**.
 
 ## Comandos úteis
 

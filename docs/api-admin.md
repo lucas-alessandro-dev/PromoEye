@@ -88,6 +88,34 @@ O envio manual continua: copiar o texto, ou abrir `https://wa.me/?text=<texto co
 
 Erros do WAHA voltam como 502 com a explicação em `error`; sem `WAHA_URL`/`WAHA_API_KEY` no servidor, 409.
 
+## Catálogo (produtos por EAN)
+
+| Método | Rota | Corpo | Resposta |
+|---|---|---|---|
+| GET | `/api/admin/products?q=&multi=1&limit=60&offset=0` | — | `ProductListDTO`. `q` com 8+ dígitos busca pelo final do EAN; `multi=1` só produtos em 2+ lojas |
+| GET | `/api/admin/products/:id` | — | `ProductDetailDTO` (o produto e as ofertas ligadas) |
+| POST | `/api/admin/offers/:id/product` | `{ gtin: string | null }` | `OfferDTO`. Liga a oferta ao produto do EAN (cria o produto se for o primeiro); `null` desliga. Se a loja mandar EAN na próxima coleta, o dela vence |
+
+`POST /api/admin/offers/manual` também aceita `gtin` (opcional): a oferta manual já entra no catálogo.
+
+## Links de afiliado
+
+| Método | Rota | Corpo | Resposta |
+|---|---|---|---|
+| GET | `/api/admin/affiliates/check?live=0|1` | — | `AffiliateCheckDTO`. Monta o link do `/ir/` para uma oferta real de cada loja e confere https, domínio, parâmetro e tag; `live=1` segue os redirecionamentos (uma requisição por loja) |
+
+O mesmo pelo terminal: `npm run check:affiliates` (`-- --live` para seguir os redirecionamentos). Sai com código 1 se algum link estiver quebrado.
+
+## Alertas de preço (leads da vitrine)
+
+| Método | Rota | Corpo | Resposta |
+|---|---|---|---|
+| GET | `/api/admin/alerts` | — | `AlertsDTO` (SMTP configurado?, ligado?, contadores e os 500 mais recentes) |
+| GET | `/api/admin/alerts.csv` | — | CSV (`;`, UTF-8 com BOM) dos alertas **ativos**. Link comum: o cookie autentica |
+| DELETE | `/api/admin/alerts/:id` | — | `204`. Apaga de vez (pedido de exclusão, LGPD) |
+
+Rotas públicas (vitrine, sem sessão, funcionam sem JavaScript): `POST /alertas` (formulário), `GET /alertas/:id/:assinatura` (página do link do e-mail), `POST /alertas/:id/:assinatura/confirmar` e `POST /alertas/:id/:assinatura/cancelar` (também o cancelamento em um clique do Gmail, RFC 8058).
+
 ## Configurações
 
 | Método | Rota | Corpo | Resposta |

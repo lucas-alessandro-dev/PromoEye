@@ -1,0 +1,102 @@
+# CLAUDE.md — Contexto do PromoEye
+
+## 1. Produto e posicionamento
+
+- **O que é:** plataforma brasileira de monitoramento, auditoria e comparação de preços. Diferente de comparadores tradicionais (Zoom, Buscapé), que dependem de feeds XML e sofrem viés de comissão, o PromoEye confere o preço nas lojas e separa desconto real de maquiagem ("metade do dobro").
+- **Objetivo de negócio:** competir com Zoom, Buscapé, Promobit e Pechincha.ai. O vertical **Casa, Cozinha & Chá de Panela** é só o caso de validação, não o foco.
+- **Proposta de valor ("auditor de preços reais"):**
+  1. **Veracidade:** desconto calculado contra a **mediana dos últimos 30 dias ponderada pelo tempo** que cada preço durou, registrada pelo próprio PromoEye. Nunca contra o preço "de" da loja.
+  2. **Frescor comprovado:** coleta de hora em hora (a cada 20 min no pico) e "preço conferido há X min" na vitrine.
+  3. **Comparação exata:** catálogo por código de barras (GTIN/EAN), não por título parecido.
+  4. **Distribuição ativa:** vitrine SSR rápida, grupo de WhatsApp e alertas por e-mail.
+- **Marco:** Black Friday 2026 (27/11, pico de 26 a 29/11) valida retenção, cliques de afiliado e estabilidade. Depois: escalar catálogo, fontes de dados autorizadas e SEO programático.
+- **Mercado:** pt-BR, R$, aviso de afiliado (CONAR) e LGPD.
+
+## 2. Arquitetura
+
+- Monorepo npm workspaces, TypeScript, Node ≥ 22.
+  - `apps/server`: Fastify. Vitrine SSR (Nunjucks), API do painel (`/api/admin/*`), redirecionamento rastreado `/ir/<id>`, coletor e agendador (croner), fila do WhatsApp (WAHA), alertas por e-mail.
+  - `apps/admin`: React + Vite em `/painel`.
+  - `packages/shared`: contratos zod, selos, formatação, catálogo de lojas, mensagem do WhatsApp, GTIN (`gtin.ts`).
+- PostgreSQL + Prisma. Modelos: `Store`, `WatchItem`, `Offer`, `PricePoint`, `ItemSnapshot`, `Product`, `PriceAlert`, `CollectorRun`, `Click`, `OutboundMessage`, `Setting`, `AdminUser`, `AdminSession`.
+- Testes: Vitest (`npm test`), só funções puras, sem banco.
+- Produção: Docker Compose na VPS Hostinger compartilhada, atrás do Caddy (HTTPS). Deploy: `bash ops/vps/deploy.sh` (envia a pasta, commitada ou não). O `ops/entrypoint.sh` aplica as migrações a cada subida. Domínio provisório `promoeye.187-53-119-70.sslip.io`. Para migrar, veja `docs/deploy-vps.md` e `PUBLIC_URL_ALIASES`.
+
+## 3. Regras de negócio
+
+### 3.1 Itens e filtro (`WatchItem` + `collector/matcher.ts`)
+- Campos: `name`, `query` (o que é buscado), `mustInclude` (palavra inteira, `|` para alternativas), `mustExclude`, `minPrice` (corta acessório), `targetPrice`, `minDiscountPct`, `category`, `storeIds`.
+- "Testar busca" no painel simula a coleta e explica cada descarte.
+- Marketplace: só vendedores da lista de confiáveis (política por loja).
+
+### 3.2 Coletor
+- Minuto 05 de cada hora (`COLLECT_CRON`). Pico: `PEAK_FROM`, `PEAK_UNTIL`, `PEAK_EVERY_MIN` (no `ops/vps/compose.yml`: 26/11 18h → 29/11 0h, a cada 20 min).
+- Adaptadores: 16 lojas VTEX (API pública), Amazon (página de busca), KaBuM! (API do site). Mercado Livre, Magalu e Casas Bahia são **manuais**.
+- **Inegociável:** nunca contornar CAPTCHA, WAF ou bloqueio anti-robô. Bloqueou, registra e para naquela loja.
+
+### 3.3 Catálogo (`Product`, `collector/catalog.ts`)
+- O produto nasce sozinho quando a loja informa um **EAN válido** (dígito verificador, fora dos prefixos de uso interno 02x/04x/2xx). Título parecido **nunca** junta anúncios.
+- Forma canônica do GTIN: 14 dígitos. Para mostrar, use `displayGtin`.
+- Ofertas sem EAN (Amazon, KaBuM!, manuais) são ligadas pelo painel. O EAN da loja vence na coleta seguinte.
+
+### 3.4 Preço, Pix e cartão
+- `Offer.price` é a base do histórico, da pontuação e das comparações. **Não troque a base** (por exemplo, para o Pix): cria uma "queda" falsa no histórico e dispara promoção falsa no grupo.
+- `pixPrice` fica à parte. VTEX: só a regra "PercentualDiscount para PaymentMethodId Pix em 1x", sem outra condição, e nunca em cima de um `spotPrice` já descontado. KaBuM!: o `price` já é o Pix.
+
+### 3.5 Pontuação e selos (`collector/scoring.ts`)
+- Positivos: `desconto-real`, `menor-preco`, `abaixo-do-alvo`, `mais-barato`, `caiu-agora`, `oferta-relampago`.
+- Proteção: `preco-de-inflado` (o "de" some da vitrine), `subiu-antes` (anula a promoção), `historico-curto`.
+
+### 3.6 Afiliados e `/ir/<id>`
+- Prioridade: link colado na oferta → modelo da loja (`tag=...` ou rede com `{url}`/`{url_encoded}`/`{id}`) → URL limpa.
+- Clique sem IP; canal `site`, `whatsapp` (`?c=wa`) ou `email` (`?c=email`). Só redireciona para https.
+- Verificação: `npm run check:affiliates [-- --live]` ou Painel › Lojas.
+
+### 3.7 WhatsApp (WAHA, motor GOWS)
+- Mensagem só quando a promoção é mais barata que a última avisada do item. **No máximo uma ativa por item**: a nova substitui as que esperavam (`supersedeOlderMessages`).
+- Uma por vez, ≥1 min com jitter, teto por hora (padrão 10), silêncio 22h–8h (suspenso em `QUIET_OFF_*`). Antes de enviar, confere preço, estoque e se há mensagem mais nova.
+- **Sem mensagens 1:1 automáticas** do número do grupo (risco de bloqueio). Alerta individual é por e-mail.
+
+### 3.8 Alertas por e-mail (`PriceAlert`, `services/alerts/*`)
+- Opt-in duplo, consentimento gravado com o texto exato, cancelamento em um clique (RFC 8058), links assinados com HMAC (`/alertas/<id>/<assinatura>`).
+- Avisa com preço-alvo atingido ou, sem alvo, com `isDeal`. Máximo 1 e-mail a cada 12 h por alerta, e de novo só se cair mais 2%.
+- Ligado só com `SMTP_URL` e `SMTP_FROM`. Sem eles o formulário some.
+
+## 4. UI
+
+- Tokens "stitch": petróleo `#072C2C`, laranja `#FF5F03` (`#E95603` na vitrine, por contraste AA), areia `#EDEADE`, Mona Sans. Kit da taste-skill em `apps/server/public/assets` (não editar); estilos próprios em `apps/server/public/site/site.css`; peças em `views/partials/_macros.njk`.
+- Rotas públicas (SSR, **100% sem JavaScript**): `/`, `/ofertas/<slug>` (item), `/produtos/<slug>` (produto por EAN), `/alertas/...`, `/sitemap.xml` (itens + produtos com oferta), `/robots.txt`.
+- JSON-LD (`lib/jsonld.ts`): Product + AggregateOffer + BreadcrumbList. Item com 2+ marcas vira ItemList, porque marcar categoria como Product é enganoso. Todo JSON-LD passa por `jsonLdScript`, que escapa `< > &` e os separadores de linha.
+- Painel: Painel, Itens, Ofertas, Lojas (com verificação de afiliados), Catálogo, Alertas, WhatsApp, Configurações.
+
+## 5. Estado e backlog
+
+### Feito (branch `feat/estrategia-bf-catalogo`, 17/11/2026)
+- Janelas de pico e silêncio com testes; KaBuM! 404; responsividade mobile.
+- EAN, marca e Pix capturados; migração `20261117200000_catalog_pix_alerts`, só aditiva.
+- Catálogo por EAN, página `/produtos/<slug>`, painel Catálogo, ligação manual por EAN.
+- JSON-LD, sitemap com produtos, `noindex` em produto sem oferta.
+- Alertas por e-mail com painel, CSV e exclusão.
+- "Conferido há X min" e o horário real da próxima coleta (inclusive no pico).
+- Uma mensagem ativa por item na fila do WhatsApp.
+- Verificação de afiliados (CLI e painel); redirecionamento 301 dos domínios antigos no `up.sh`.
+
+### Pendente (depende de decisão ou acesso do Lucas)
+- Comprar/apontar o domínio definitivo e rodar a migração (`docs/deploy-vps.md`).
+- Contratar SMTP (Brevo/SES/Resend) e configurar SPF/DKIM.
+- Cadastrar e validar os afiliados reais (Amazon `tag`, redes para VTEX, links manuais de ML/Magalu).
+- Ligar "Deixar o Google indexar" depois do domínio definitivo.
+
+### Depois da Black Friday
+- Fontes de dados autorizadas para escalar: feeds de redes de afiliados e parcerias (as grandes lojas bloqueiam robô).
+- Catálogo além dos itens vigiados: descoberta de produtos por categoria, não só pela busca de cada item.
+- Normalizar a comparação Pix × cartão entre lojas sem quebrar o histórico.
+- WhatsApp 1:1 só com opt-in iniciado pela pessoa (ela manda a primeira mensagem; webhook do WAHA).
+
+## 6. Diretrizes para alterar este repositório
+
+- **SSR sem JS:** toda página pública renderiza completa no servidor; JavaScript só melhora.
+- **Contratos primeiro:** mudança de payload, selo ou regra começa em `packages/shared` (zod) e ganha teste no Vitest.
+- **Não quebrar a coleta em produção:** migrações só aditivas; nunca remover rate limits, horário de silêncio, conferência antes do envio ou fallbacks dos adaptadores. O histórico acumulado é o ativo principal.
+- **Nunca** contornar bloqueio anti-robô, nem trocar a base do `price`.
+- `docker-compose.yml` usa CRLF; `*.sh`, `Dockerfile` e `Caddyfile` precisam de LF (`.gitattributes`).

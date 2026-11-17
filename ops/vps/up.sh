@@ -32,6 +32,18 @@ if [ -z "$host" ]; then
   echo "PUBLIC_URL vazio no .env" >&2
   exit 1
 fi
+# Endereços antigos (PUBLIC_URL_ALIASES, separados por vírgula) redirecionam para o
+# novo com o mesmo caminho: trocar de domínio não quebra os links /ir/... que já
+# foram para o grupo do WhatsApp nem o que o Google já indexou.
+aliases=""
+for a in $(sed -n 's/^PUBLIC_URL_ALIASES=//p' .env | tr -d "\"' " | tr ',' ' '); do
+  a=$(printf '%s' "$a" | sed -E 's#^[a-z]+://##; s#[/:].*$##')
+  case "$a" in
+    "" | "$host") ;;
+    *[!a-zA-Z0-9.-]*) echo "PUBLIC_URL_ALIASES: endereço inválido ignorado: $a" >&2 ;;
+    *) aliases="${aliases:+$aliases, }$a" ;;
+  esac
+done
 cat > /srv/proxy/caddy/sites/promoeye.caddy <<EOF
 # Gerado por $PROJECT_DIR/src/ops/vps/up.sh a partir do PUBLIC_URL. Não edite aqui.
 $host {
@@ -39,6 +51,16 @@ $host {
 	reverse_proxy promoeye-app:3000
 }
 EOF
+if [ -n "$aliases" ]; then
+  cat >> /srv/proxy/caddy/sites/promoeye.caddy <<EOF
+
+# Domínios antigos (PUBLIC_URL_ALIASES): 301 para o novo, com o caminho.
+$aliases {
+	redir https://$host{uri} permanent
+}
+EOF
+  echo "→ redirecionando para $host: $aliases"
+fi
 docker compose -f /srv/proxy/compose.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile
 
 # Backup diário do banco às 03:30 (horário de Brasília).

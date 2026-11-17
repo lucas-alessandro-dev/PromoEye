@@ -25,6 +25,7 @@ Outros comandos:
 |---|---|
 | `npm run collect` | uma coleta pelo terminal (`-- <slug>` para um item só) |
 | `npm run probe -- "air fryer"` | testa a busca em cada loja, sem gravar nada |
+| `npm run check:affiliates` | confere o link de afiliado de cada loja (`-- --live` segue os redirecionamentos) |
 | `npm test` | testes (filtro, pontuação, afiliado, parsers das lojas, contrato da API, fila do WhatsApp) |
 | `npm run build` | compila shared, painel e servidor |
 | `node scripts/shoot.mjs <url> <pasta> 1440x900,390x844 --tiles` | capturas da vitrine em Chrome headless |
@@ -79,9 +80,39 @@ O aviso de afiliado (CONAR) fica no rodapé da vitrine e é editável em Configu
 
 Nos primeiros dias o histórico é curto (selo "Acompanhando há pouco tempo"), então quem decide são o preço-alvo e a comparação entre lojas. **Cadastre os itens o quanto antes**: cada hora a mais de histórico deixa o "desconto real" mais confiável na Black Friday (27/11/2026).
 
+## Catálogo: o mesmo produto em todas as lojas (EAN)
+
+O item ("Air fryer 4L") junta tudo o que casou com uma busca. O **produto** (`Product`) é UM modelo, identificado pelo código de barras (GTIN/EAN): `/produtos/<nome>-<ean>` mostra o preço desse EAN em cada loja, o histórico e o JSON-LD com o EAN.
+
+- Nasce sozinho na coleta, quando a loja informa um EAN válido (as 16 lojas VTEX informam). Só junta por EAN com dígito verificador certo e fora dos códigos de uso interno; título parecido **nunca** junta anúncios (`packages/shared/src/gtin.ts`, `apps/server/src/collector/catalog.ts`).
+- Amazon e KaBuM! não mostram o EAN na busca, e as lojas manuais não têm busca: ligue a oferta ao EAN em **Ofertas › Mais › Ligar ao EAN**, ou preencha o EAN na oferta manual.
+- No painel, **Catálogo** lista os produtos e quantos já estão em 2 lojas ou mais.
+- Limitação conhecida: o anúncio VTEX guarda o EAN do SKU mais barato. Se a voltagem mais barata mudar (110 V ↔ 220 V), o anúncio muda de produto.
+
+## Pix e cartão
+
+O preço principal de cada oferta (`price`) é a base do histórico e das comparações, e **não mudou**. O Pix fica num campo à parte (`pixPrice`):
+
+- **VTEX**: lido da regra que a loja publica ("Desconto PGTO Pix - 5%"). Só vale a regra de desconto percentual para Pix em 1x, sem outra condição (cupom, grupo de cliente). Se o `spotPrice` já tiver desconto, não descontamos de novo.
+- **KaBuM!**: o preço principal já é o do Pix (`price_with_discount`), e o cartão vai em `cardPrice`.
+- A vitrine mostra "R$ X no Pix" e "R$ Y no cartão".
+
+Por que o Pix não virou o preço principal: o histórico foi gravado sem o desconto do Pix. Trocar a base faria os anúncios "caírem 5%" de uma coleta para outra, e o grupo receberia promoções falsas.
+
+## Alertas por e-mail ("me avise quando baixar")
+
+Formulário na página do item e do produto, sem JavaScript. A pessoa deixa o e-mail, um preço-alvo opcional e marca o consentimento.
+
+- **Opt-in duplo**: nada é enviado antes de confirmar pelo link do e-mail. Confirmar e cancelar são botões (POST), porque antivírus de e-mail abrem links sozinhos.
+- Avisa quando o menor preço passa do alvo ou, sem alvo, quando vira promoção de verdade (`isDeal`). No máximo um e-mail a cada 12 h por alerta, e de novo só se cair mais 2%.
+- **LGPD**: grava o texto exato do consentimento e a data. Cada e-mail traz o link de cancelar e o cabeçalho `List-Unsubscribe` (cancela em um clique no Gmail). No painel, **Alertas** apaga um registro de vez e exporta os ativos em CSV.
+- A resposta do formulário é sempre a mesma, exista ou não um alerta: ele não serve para descobrir quem está inscrito. Também tem limite por IP e um campo escondido contra robôs.
+- **Para ligar**: `SMTP_URL` e `SMTP_FROM` no `.env` (Brevo, Amazon SES, Resend…, com SPF/DKIM do domínio no provedor). Sem eles o formulário não aparece. Também dá para desligar em Configurações.
+- **WhatsApp individual ficou de fora de propósito**: mandar mensagem 1:1 do número do grupo para quem digitou um telefone é o caminho mais curto para o bloqueio. Quem prefere WhatsApp é mandado para o grupo.
+
 ## WhatsApp
 
-Quando um item ganha uma promoção nova, mais barata que a última avisada, o PromoEye monta a mensagem. Cada item gera no máximo uma, para a mesma promoção não chegar em cinco cores. O convite do grupo (Configurações) vira um botão na vitrine.
+Quando um item ganha uma promoção nova, mais barata que a última avisada, o PromoEye monta a mensagem. Cada item tem no máximo uma mensagem esperando: a nova (mais barata) substitui a anterior, para a mesma promoção não chegar em cinco cores. O convite do grupo (Configurações) vira um botão na vitrine.
 
 **Envio automático** (Painel → WhatsApp): o PromoEye manda sozinho para o grupo, com a foto do produto e o texto na legenda, pelo [WAHA](https://waha.devlike.pro). O WAHA é gratuito e open source desde a versão 2026.6 e roda como mais um container na VPS (motor GOWS, sem navegador). Conecte o número com o QR code ou com código de pareamento, escolha o grupo na lista e ligue "Enviar sozinho".
 
@@ -103,7 +134,7 @@ Roda na VPS da Hostinger, que hospeda outros projetos também, atrás de um Cadd
 bash ops/vps/deploy.sh
 ```
 
-Na subida, o `ops/entrypoint.sh` aplica as migrações e o seed das lojas. Organização no servidor, primeira instalação, domínio, backups e comandos: [docs/deploy-vps.md](docs/deploy-vps.md).
+Na subida, o `ops/entrypoint.sh` aplica as migrações e o seed das lojas. Para trocar de domínio sem quebrar os links já enviados, ponha o endereço antigo em `PUBLIC_URL_ALIASES` no `.env` da VPS: o `up.sh` gera um redirecionamento 301 com o caminho. Organização no servidor, primeira instalação, domínio, backups e comandos: [docs/deploy-vps.md](docs/deploy-vps.md).
 
 Para testar a imagem de produção no seu computador: `docker compose --profile prod up -d --build` (app em `127.0.0.1:${APP_PORT}`).
 
@@ -119,7 +150,10 @@ Para testar a imagem de produção no seu computador: `docker compose --profile 
 ```
 apps/server     Fastify: vitrine (Nunjucks), API do painel, /ir, coletor e agendador
   src/collector   adaptadores das lojas, filtro (matcher), pontuação (scoring), coleta (run)
+  src/collector/catalog.ts  liga os anúncios ao produto do mesmo EAN
   src/services/whatsapp  cliente do WAHA e fila de envio automático
+  src/services/alerts    alertas por e-mail: inscrição, regras, envio, links assinados
+  src/lib/jsonld.ts      dados estruturados (Product, AggregateOffer, BreadcrumbList)
 apps/admin      painel React (Vite), servido em /painel
 packages/shared contrato da API (zod), selos, formatação, catálogo de lojas, mensagem do WhatsApp
 prisma          schema e migrações
