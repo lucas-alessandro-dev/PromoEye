@@ -85,4 +85,4 @@
 {% endmacro %}
 
 {# Logo da loja (public/site/logos/<id>.svg); sem arquivo, o nome em texto. O alt é o nome: leitor de tela e busca leem a loja. #}
-{% macro storeMark(id, name, cls='') %}{% set src = id | storeLogo %}{% if src %}<img class="slogo {{ cls }}" src="{{ src }}" alt="{{ name }}" title="{{ name }}" decoding="async">{% else %}<span class="slogo slogo--text {{ cls }}">{{ name }}</span>{% endif %}{% endmacro %}
+{% macro storeMark(id, name, cls='') %}{% set src = id | storeLogo %}{% if src and (id | logoNeedsName) %}<span class="slogo-pair {{ cls }}"><img class="slogo {{ cls }}" src="{{ src }}" alt="" decoding="async"><span class="slogo-pair__name">{{ name }}</span></span>{% elif src %}<img class="slogo {{ cls }}" src="{{ src }}" alt="{{ name }}" title="{{ name }}" decoding="async">{% else %}<span class="slogo slogo--text {{ cls }}">{{ name }}</span>{% endif %}{% endmacro %}

@@ -96,6 +96,10 @@ export function storeLogo(storeId: string | null | undefined): string | null {
 }
 env.addFilter('storeLogo', (id: string) => storeLogo(id))
 
+/** Logos que são só o símbolo (sem o nome escrito): a página mostra o símbolo e o nome ao lado. */
+const SYMBOL_ONLY = new Set(['carrefour'])
+env.addFilter('logoNeedsName', (id: string) => SYMBOL_ONLY.has(id))
+
 export function render(reply: FastifyReply, template: string, ctx: Record<string, unknown>): FastifyReply {
   const html = env.render(template, { ...ctx, nonce: reply.peNonce, v: staticVersion() })
   return reply.type('text/html; charset=utf-8').send(html)

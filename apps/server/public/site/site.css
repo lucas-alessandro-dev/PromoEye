@@ -640,3 +640,7 @@ img.slogo--buy { height: 20px; max-width: 120px; vertical-align: -5px; }
   .stores-row img.slogo--mq { height: 24px; max-width: 120px; }
   img.slogo--st { height: 22px; max-width: 120px; }
 }
+/* símbolo sem nome escrito (Carrefour): o símbolo e o nome lado a lado */
+span.slogo-pair { display: inline-flex; align-items: center; gap: 6px; height: auto; max-width: none; white-space: nowrap; }
+span.slogo-pair > .slogo-pair__name { font-weight: 500; }
+.stores-row span.slogo-pair { font: var(--display-weight) clamp(18px, 1.6vw, 24px)/1.2 var(--font-display); color: var(--muted); }
