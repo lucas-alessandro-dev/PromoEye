@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import nunjucks from 'nunjucks'
 import type { FastifyReply } from 'fastify'
@@ -34,7 +36,32 @@ env.addFilter('hourBR', (v: Date | string) =>
   new Date(v).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
 )
 
+/**
+ * Versão dos arquivos de /static (site.css, shop.js): um hash do conteúdo que
+ * vai no endereço (?v=…). Eles são servidos com cache de 7 dias; sem a versão,
+ * quem já tinha visitado continuava com o CSS antigo por até uma semana depois
+ * de cada deploy (página nova + CSS velho = ícone gigante, botão sem estilo).
+ * O kit de /assets não entra: não é editado, e versionar módulos que importam
+ * uns aos outros faria o navegador carregar duas cópias.
+ */
+const STATIC_DIR = resolve(appRoot, 'public/site')
+
+function computeStaticVersion(): string {
+  const h = createHash('sha256')
+  for (const name of readdirSync(STATIC_DIR).sort()) {
+    const file = resolve(STATIC_DIR, name)
+    if (!statSync(file).isFile()) continue
+    h.update(name)
+    h.update(readFileSync(file))
+  }
+  return h.digest('hex').slice(0, 10)
+}
+
+// Em produção os arquivos não mudam com o servidor no ar; em dev, recalcula a cada página.
+const prodStaticVersion = isProd ? computeStaticVersion() : null
+export const staticVersion = (): string => prodStaticVersion ?? computeStaticVersion()
+
 export function render(reply: FastifyReply, template: string, ctx: Record<string, unknown>): FastifyReply {
-  const html = env.render(template, { ...ctx, nonce: reply.peNonce })
+  const html = env.render(template, { ...ctx, nonce: reply.peNonce, v: staticVersion() })
   return reply.type('text/html; charset=utf-8').send(html)
 }
