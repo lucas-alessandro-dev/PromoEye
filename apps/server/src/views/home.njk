@@ -1,5 +1,5 @@
 {% extends "layout.njk" %}
-{% from "partials/_macros.njk" import productCard, waIcon %}
+{% from "partials/_macros.njk" import productCard, waIcon, storeMark %}
 {% set useMoments = true %}
 
 {% block main %}
@@ -121,7 +121,7 @@
     <div class="stores-row">
       <p class="t-label">Lojas conferidas de hora em hora{% if manualStores.length %}; {{ manualStores | join(', ') }} entram à mão{% endif %}</p>
       <div data-moment="marquee-row" data-moment-opts='{"speed": 36}'>
-        <ul class="mo-mq__track">{% for s in marquee %}<li>{{ s }}</li>{% endfor %}</ul>
+        <ul class="mo-mq__track">{% for s in marquee %}<li>{{ storeMark(s.id, s.name, 'slogo--mq') }}</li>{% endfor %}</ul>
       </div>
     </div>
     {% endif %}

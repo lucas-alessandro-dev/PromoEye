@@ -45,21 +45,56 @@ env.addFilter('hourBR', (v: Date | string) =>
  * uns aos outros faria o navegador carregar duas cópias.
  */
 const STATIC_DIR = resolve(appRoot, 'public/site')
+const LOGO_DIR = resolve(STATIC_DIR, 'logos')
+const LOGO_EXT = ['svg', 'webp', 'png'] as const
 
-function computeStaticVersion(): string {
-  const h = createHash('sha256')
-  for (const name of readdirSync(STATIC_DIR).sort()) {
-    const file = resolve(STATIC_DIR, name)
-    if (!statSync(file).isFile()) continue
-    h.update(name)
-    h.update(readFileSync(file))
+/** Arquivos de public/site e de public/site/logos (um nível), em ordem estável. */
+function staticFiles(): { rel: string; abs: string }[] {
+  const out: { rel: string; abs: string }[] = []
+  for (const [dir, prefix] of [[STATIC_DIR, ''], [LOGO_DIR, 'logos/']] as const) {
+    let names: string[] = []
+    try {
+      names = readdirSync(dir).sort()
+    } catch {
+      continue // sem pasta de logos: tudo bem
+    }
+    for (const name of names) {
+      const abs = resolve(dir, name)
+      if (statSync(abs).isFile()) out.push({ rel: prefix + name, abs })
+    }
   }
-  return h.digest('hex').slice(0, 10)
+  return out
+}
+
+function computeStaticState(): { version: string; logos: Map<string, string> } {
+  const h = createHash('sha256')
+  const logos = new Map<string, string>()
+  const files = staticFiles()
+  for (const f of files) {
+    h.update(f.rel)
+    h.update(readFileSync(f.abs))
+  }
+  const version = h.digest('hex').slice(0, 10)
+  // Logo de cada loja: logos/<id>.svg (ou .webp/.png), com a mesma versão no endereço.
+  for (const ext of [...LOGO_EXT].reverse()) {
+    for (const f of files) {
+      const m = f.rel.match(new RegExp(`^logos/([a-z0-9-]+)\\.${ext}$`))
+      if (m) logos.set(m[1]!, `/static/${f.rel}?v=${version}`)
+    }
+  }
+  return { version, logos }
 }
 
 // Em produção os arquivos não mudam com o servidor no ar; em dev, recalcula a cada página.
-const prodStaticVersion = isProd ? computeStaticVersion() : null
-export const staticVersion = (): string => prodStaticVersion ?? computeStaticVersion()
+const prodState = isProd ? computeStaticState() : null
+const staticState = () => prodState ?? computeStaticState()
+export const staticVersion = (): string => staticState().version
+
+/** Endereço do logo da loja, ou null (a página mostra o nome em texto). */
+export function storeLogo(storeId: string | null | undefined): string | null {
+  return storeId ? (staticState().logos.get(storeId) ?? null) : null
+}
+env.addFilter('storeLogo', (id: string) => storeLogo(id))
 
 export function render(reply: FastifyReply, template: string, ctx: Record<string, unknown>): FastifyReply {
   const html = env.render(template, { ...ctx, nonce: reply.peNonce, v: staticVersion() })

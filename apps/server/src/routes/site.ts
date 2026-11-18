@@ -514,7 +514,7 @@ export async function siteRoutes(app: FastifyInstance) {
           offers: storeCounts.get(s.id) ?? 0,
         }))
         .sort((a, b) => b.offers - a.offers),
-      marquee: autoStores.slice(0, 14).map((s) => s.name),
+      marquee: autoStores.slice(0, 14).map((s) => ({ id: s.id, name: s.name })),
       manualStores: stores.filter((s) => s.adapter === 'MANUAL').map((s) => s.name),
       counts: {
         items: items.length,

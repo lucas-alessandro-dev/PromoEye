@@ -623,3 +623,20 @@ html[data-buttons] .btn.btn--wa::after { content: none; display: none; }
   /* o nome grande do rodapé (o kit usa 19vw) passava da coluna e era cortado no "e" */
   .close__word { font-size: clamp(44px, 16.5vw, 96px); }
 }
+
+/* ══ Logos das lojas (public/site/logos/<id>.svg; sem arquivo, o nome em texto) ══════════════════════
+   Altura fixa e largura livre: cada marca tem a sua proporção. object-fit evita esticar. */
+img.slogo { display: inline-block; width: auto; max-width: 100%; object-fit: contain; vertical-align: middle; }
+/* a fileira da home: o kit já põe as imagens a 28px e .8 de opacidade; aqui só o teto de largura */
+.stores-row img.slogo--mq { height: 30px; max-width: 150px; opacity: 1; }
+.stores-row .slogo--text.slogo--mq { font: inherit; }
+/* "Preço em cada loja": o logo no lugar do nome */
+img.slogo--st { height: 26px; max-width: 140px; }
+/* "Sem oferta agora": menor, como o texto que estava ali */
+img.slogo--so { height: 20px; max-width: 110px; opacity: .85; }
+/* "Loja: [logo]" na caixa de compra */
+img.slogo--buy { height: 20px; max-width: 120px; vertical-align: -5px; }
+@media (max-width: 639px) {
+  .stores-row img.slogo--mq { height: 24px; max-width: 120px; }
+  img.slogo--st { height: 22px; max-width: 120px; }
+}

@@ -83,3 +83,6 @@
   <p class="alertbox__fine">Sem a confirmação pelo link do e-mail, nada é enviado. No máximo um aviso a cada 12 horas.{% if whatsappInvite %} Prefere o WhatsApp? <a href="{{ whatsappInvite }}" target="_blank" rel="noopener">Entre no grupo</a>.{% endif %}</p>
 </section>
 {% endmacro %}
+
+{# Logo da loja (public/site/logos/<id>.svg); sem arquivo, o nome em texto. O alt é o nome: leitor de tela e busca leem a loja. #}
+{% macro storeMark(id, name, cls='') %}{% set src = id | storeLogo %}{% if src %}<img class="slogo {{ cls }}" src="{{ src }}" alt="{{ name }}" title="{{ name }}" decoding="async">{% else %}<span class="slogo slogo--text {{ cls }}">{{ name }}</span>{% endif %}{% endmacro %}

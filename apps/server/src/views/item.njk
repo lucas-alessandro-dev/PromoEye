@@ -1,5 +1,5 @@
 {% extends "layout.njk" %}
-{% from "partials/_macros.njk" import offerRow, chip, productCard, bigPrice, payLines, checked, alertForm %}
+{% from "partials/_macros.njk" import offerRow, chip, productCard, bigPrice, payLines, checked, alertForm, storeMark %}
 
 {#
   Página do item, no jeito de uma página de produto das grandes lojas:
@@ -46,7 +46,7 @@
           {% if best.showList %}<s class="buy__was"><span class="sr-only">Preço anunciado antes: </span>{{ best.listPrice | brl }}</s>{% endif %}
           <p class="buy__row">{{ bigPrice(best.price, 'buy__price') }}{% if best.listOff %}<span class="buy__off">{{ best.listOff | pct }} OFF</span>{% endif %}</p>
           {{ payLines(best) }}
-          <p class="buy__store">Loja: <b>{{ best.storeName }}</b>{% if best.sellerName %} · vendido por {{ best.sellerName }}{% endif %}</p>
+          <p class="buy__store">Loja: <b>{{ storeMark(best.storeId, best.storeName, 'slogo--buy') }}</b>{% if best.sellerName %} · vendido por {{ best.sellerName }}{% endif %}</p>
           <p class="buy__fresh"><span class="buy__fresh-dot" aria-hidden="true"></span>{{ checked(best) }}</p>
           {% if typicalOff and typicalOff >= 0.02 %}<p class="buy__vs">{{ typicalOff | pct }} abaixo do preço típico dos últimos 30 dias ({{ history.typical | brl }})</p>{% endif %}
           <div class="buy__actions">
@@ -87,7 +87,7 @@
         {% for r in stores.withOffer %}
         <li class="st{% if r.isBest %} st--best{% endif %}">
           <div class="st__who">
-            <span class="st__name">{{ r.name }}</span>
+            <span class="st__name">{{ storeMark(r.id, r.name, 'slogo--st') }}</span>
             {% if r.isBest %}<span class="st__tag">Menor preço</span>{% endif %}
             <span class="st__meta">{{ r.offers.length }} {{ 'anúncio' if r.offers.length == 1 else 'anúncios' }}{% if r.best.sellerName %} · vendido por {{ r.best.sellerName }}{% endif %}</span>
           </div>
@@ -129,7 +129,7 @@
       <ul class="stores-off">
         {% for r in stores.without %}
         <li class="so so--{{ r.status }}">
-          <span class="so__name">{{ r.name }}</span>
+          <span class="so__name">{{ storeMark(r.id, r.name, 'slogo--so') }}</span>
           <span class="so__why">
             {%- if r.status == 'esgotado' %}Esgotado{% if r.lastPrice %} · estava {{ r.lastPrice | brl }}{% endif %}
             {%- elif r.status == 'nada' %}Não encontrado na loja
