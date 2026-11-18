@@ -112,7 +112,7 @@
           <p class="t-lead">{% if lastRunAt %}Última coleta às {{ lastRunAt | hourBR }} ({{ lastRunAt | ago }}).{% endif %}{% if nextRunAt %} A próxima sai às {{ nextRunAt | hourBR }}{% if collectEvery < 60 %}: nesta Black Friday, a cada {{ collectEvery }} minutos{% endif %}.{% endif %}</p>
         </div>
         <div class="btn-row">
-          {% if site.whatsappInvite %}<a class="btn btn--primary btn--wa" href="{{ site.whatsappInvite }}" target="_blank" rel="noopener">{{ waIcon() }}Entrar no grupo do WhatsApp</a>{% endif %}
+          {% if site.whatsappInvite %}<a class="btn btn--primary btn--wa" href="{{ site.whatsappInvite }}" target="_blank" rel="noopener">{{ waIcon() }}Entrar no grupo<span class="xs-hide"> do WhatsApp</span></a>{% endif %}
           <a class="btn {{ 'btn--secondary' if site.whatsappInvite else 'btn--primary' }}" href="/#ofertas">Ver as promoções<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
         </div>
       </div>

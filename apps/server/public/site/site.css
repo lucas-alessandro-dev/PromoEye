@@ -597,3 +597,29 @@ html[data-buttons] .btn.btn--wa::after { content: none; display: none; }
 .alertpage .btn-row form { margin: 0; }
 .alertpage .alertbox__msg { margin: 0; }
 @media (max-width: 639px) { .alertpage .btn-row, .alertpage .btn-row form { width: 100%; } .alertpage .btn-row .btn { width: 100%; } }
+
+/* ══ Altura das seções em janelas baixas (todas as larguras de 1280 para cima) ══════════════════════
+   O kit fixa cada seção da home e o rodapé em exatamente uma tela (height: 100svh) a partir de 1280px.
+   Num notebook (1280–1440 de largura e 550–700 de altura útil, ou um monitor 1920 com zoom de 125–150%)
+   o conteúdo não cabe na altura fixa e cobre a seção seguinte: os nomes das lojas sob o título dos
+   selos, o nome gigante do rodapé sobre os links. Aqui vale o que o próprio kit já faz de 640 a 1279:
+   no mínimo uma tela, crescendo com o conteúdo. Numa tela alta (1440×900, 1920×1080) nada muda. */
+@media (min-width: 1280px) {
+  main > :is(section, .section):not(.hero, .section--hero), footer.closing {
+    height: auto; min-height: calc(var(--h, 1) * 100vh); min-height: calc(var(--h, 1) * 100svh);
+  }
+  :where(main > :is(section, .section):not(.hero, .section--hero), footer.closing) { display: flex; flex-direction: column; }
+  main > :is(section, .section):not(.hero, .section--hero) > :is(.wrap, .container), footer.closing > .wrap { flex: 1 0 auto; height: auto; min-height: 0; }
+}
+
+/* Telas de 320–379px (iPhone SE, Androids pequenos): "Entrar no grupo do WhatsApp" não cabia numa linha
+   e alargava o rodapé inteiro (e a página rolava para o lado). Abaixo de 380px os botões quebram a linha. */
+@media (max-width: 379px) {
+  .btn-row > .btn, .wa-cta .btn { max-width: 100%; white-space: normal; text-align: center; line-height: 1.25; }
+  footer.closing .closing__cta, footer.closing .section-head--split > * { min-width: 0; }
+}
+@media (max-width: 379px) {
+  .xs-hide { display: none; }
+  /* o nome grande do rodapé (o kit usa 19vw) passava da coluna e era cortado no "e" */
+  .close__word { font-size: clamp(44px, 16.5vw, 96px); }
+}
