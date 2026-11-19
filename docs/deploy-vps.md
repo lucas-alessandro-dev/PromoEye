@@ -64,20 +64,35 @@ Criar o usuário do painel (a senha é pedida no terminal, sem eco):
 ssh -t vps 'cd /srv/apps/promoeye && docker compose exec app npm run create-admin -- voce@exemplo.com "Seu Nome"'
 ```
 
-## Trocar para um domínio de verdade
+## Domínio
 
-Hoje o endereço é provisório: `promoeye.187-53-119-70.sslip.io`. O sslip.io devolve o IP que está no próprio nome, então funciona sem configurar DNS.
+Desde 19/11/2026 o endereço é `https://promoeye.com.br`. No `.env` da VPS:
 
-1. No registro do domínio, crie um registro **A** apontando para `187.53.119.70` (e outro para `www`, se for usar). Espere o DNS responder: `nslookup promoeye.com.br` precisa devolver o IP da VPS, senão o Caddy não consegue o certificado.
-2. `ssh vps nano /srv/apps/promoeye/.env`:
-   - troque o `PUBLIC_URL` pelo endereço novo (`https://promoeye.com.br`);
-   - acrescente `PUBLIC_URL_ALIASES=promoeye.187-53-119-70.sslip.io,www.promoeye.com.br`. Esses endereços passam a responder com **301 para o novo, mantendo o caminho**. Os links `/ir/...` que já foram para o grupo do WhatsApp continuam contando clique e aplicando o afiliado, e o que o Google indexou passa para o domínio novo.
-3. `ssh vps sh /srv/apps/promoeye/src/ops/vps/up.sh`. O Caddy é reconfigurado e emite o certificado sozinho.
-4. Confira:
-   - `curl -sI https://promoeye.187-53-119-70.sslip.io/ofertas/qualquer` precisa responder `301` com `location: https://promoeye.com.br/ofertas/qualquer`;
-   - a vitrine abre no domínio novo, e uma mensagem nova do WhatsApp sai com o link novo;
-   - `ssh -t vps 'cd /srv/apps/promoeye && docker compose exec app npm run check:affiliates -- --live'` não mostra nenhum link quebrado;
-   - em **Painel › Configurações**, ligue "Deixar o Google indexar" só depois do domínio definitivo. Antes disso o `robots.txt` bloqueia tudo de propósito.
+```
+PUBLIC_URL=https://promoeye.com.br
+PUBLIC_URL_ALIASES=promoeye.187-53-119-70.sslip.io,www.promoeye.com.br
+```
+
+O endereço provisório (sslip.io) e o `www` respondem **301 para o domínio, mantendo o caminho e a query**. Não tire o sslip da lista: os links `/ir/...` que já foram para o grupo do WhatsApp usam esse endereço e continuam contando clique e aplicando o afiliado.
+
+O DNS fica na Hostinger (hPanel › Domínios › promoeye.com.br › DNS; nameservers `*.dns-parking.com`): registro A `@` → `187.53.119.70` e CNAME `www` → `promoeye.com.br`. Uma edição no hPanel leva alguns minutos para chegar aos servidores deles. O e-mail (SPF, DKIM) também entra nessa zona.
+
+### Trocar de domínio de novo
+
+1. No DNS, **edite** o registro A `@` para `187.53.119.70`. Não crie um segundo A, senão parte das visitas cai no endereço antigo. Espere o DNS responder: `nslookup novo.dominio 1.1.1.1` precisa devolver só o IP da VPS, senão o Caddy não consegue o certificado. Não troque o `.env` antes disso: os endereços antigos passariam a redirecionar para um domínio que ainda não chega à VPS.
+2. `ssh vps nano /srv/apps/promoeye/.env`: ponha o endereço novo no `PUBLIC_URL` e acrescente o antigo ao `PUBLIC_URL_ALIASES`, sem tirar os que já estão lá.
+3. `ssh vps sh /srv/apps/promoeye/src/ops/vps/up.sh`. O Caddy é reconfigurado e emite os certificados sozinho. Rode fora do minuto 05, quando começa a coleta.
+4. As mensagens do WhatsApp guardam o link de quando entraram na fila. Troque o endereço nas que ainda vão sair, senão elas saem com o domínio antigo (funcionam pelo 301, mas o grupo vê o endereço velho):
+   ```bash
+   ssh vps 'cd /srv/apps/promoeye && docker compose exec -T db sh -c "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\""'
+   update "OutboundMessage" set body = replace(body, 'https://ANTIGO', 'https://NOVO') where status in ('DRAFT', 'QUEUED');
+   ```
+5. Confira:
+   - `curl -sI https://ANTIGO/ofertas/qualquer?c=wa` precisa responder `301` com `location: https://NOVO/ofertas/qualquer?c=wa`;
+   - a vitrine abre no domínio novo, com o `canonical` e o `sitemap.xml` no endereço novo;
+   - `ssh -t vps 'cd /srv/apps/promoeye && docker compose exec app npm run check:affiliates -- --live'` não mostra nenhum link quebrado.
+
+O `robots.txt` bloqueia tudo enquanto **Painel › Configurações › "Deixar o Google indexar"** estiver desligado. Ligue com o domínio definitivo no ar.
 
 ## Alertas por e-mail (SMTP)
 

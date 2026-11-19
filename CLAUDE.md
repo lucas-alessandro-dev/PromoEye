@@ -20,7 +20,7 @@
   - `packages/shared`: contratos zod, selos, formatação, catálogo de lojas, mensagem do WhatsApp, GTIN (`gtin.ts`).
 - PostgreSQL + Prisma. Modelos: `Store`, `WatchItem`, `Offer`, `PricePoint`, `ItemSnapshot`, `Product`, `PriceAlert`, `CollectorRun`, `Click`, `OutboundMessage`, `Setting`, `AdminUser`, `AdminSession`.
 - Testes: Vitest (`npm test`), só funções puras, sem banco.
-- Produção: Docker Compose na VPS Hostinger compartilhada, atrás do Caddy (HTTPS). Deploy: `bash ops/vps/deploy.sh` (envia a pasta, commitada ou não). O `ops/entrypoint.sh` aplica as migrações a cada subida. Domínio provisório `promoeye.187-53-119-70.sslip.io`. Para migrar, veja `docs/deploy-vps.md` e `PUBLIC_URL_ALIASES`.
+- Produção: Docker Compose na VPS Hostinger compartilhada, atrás do Caddy (HTTPS). Deploy: `bash ops/vps/deploy.sh` (envia a pasta, commitada ou não). O `ops/entrypoint.sh` aplica as migrações a cada subida. Domínio `https://promoeye.com.br` (DNS na Hostinger: A `@` → VPS, `www` CNAME). O provisório `promoeye.187-53-119-70.sslip.io` e o `www` respondem 301 com o caminho (`PUBLIC_URL_ALIASES`): não tirar, há links `/ir/` antigos no grupo. Trocar de domínio: `docs/deploy-vps.md`.
 
 ## 3. Regras de negócio
 
@@ -80,12 +80,12 @@
 - "Conferido há X min" e o horário real da próxima coleta (inclusive no pico).
 - Uma mensagem ativa por item na fila do WhatsApp.
 - Verificação de afiliados (CLI e painel); redirecionamento 301 dos domínios antigos no `up.sh`.
+- Domínio definitivo `promoeye.com.br` no ar (19/11/2026), com certificado, 301 do sslip e do `www`, e a fila do WhatsApp já com o link novo.
 
 ### Pendente (depende de decisão ou acesso do Lucas)
-- Comprar/apontar o domínio definitivo e rodar a migração (`docs/deploy-vps.md`).
-- Contratar SMTP (Brevo/SES/Resend) e configurar SPF/DKIM.
-- Cadastrar e validar os afiliados reais (Amazon `tag`, redes para VTEX, links manuais de ML/Magalu).
-- Ligar "Deixar o Google indexar" depois do domínio definitivo.
+- Contratar SMTP (Brevo/SES/Resend) e configurar SPF/DKIM no DNS de `promoeye.com.br` (zona na Hostinger).
+- Cadastrar e validar os afiliados reais (Amazon `tag`, redes para VTEX, links manuais de ML/Magalu). O modelo atual do Mercado Livre é um link de perfil `/social/...` colado como parâmetro e não gera comissão.
+- Ligar "Deixar o Google indexar" (o domínio definitivo já está no ar).
 
 ### Depois da Black Friday
 - Fontes de dados autorizadas para escalar: feeds de redes de afiliados e parcerias (as grandes lojas bloqueiam robô).
