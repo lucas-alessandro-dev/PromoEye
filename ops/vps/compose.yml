@@ -64,6 +64,8 @@ services:
       WAHA_URL: http://waha:3000
       WAHA_API_KEY: ${WAHA_API_KEY:?defina WAHA_API_KEY no .env (o up.sh cria)}
       WAHA_SESSION: default
+      # Bot do Telegram (crie no @BotFather). Vazio = sem envio pelo Telegram.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       # Alertas "me avise quando baixar" por e-mail. Vazio = desligados (o formulário some).
       SMTP_URL: ${SMTP_URL:-}
       SMTP_FROM: ${SMTP_FROM:-}

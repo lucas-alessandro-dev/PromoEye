@@ -5,6 +5,7 @@ import type {
   LoginInput,
   ManualOfferInput,
   MeDTO,
+  MessageChannel,
   MessageDTO,
   MessageUpdateInput,
   OfferDTO,
@@ -19,6 +20,9 @@ import type {
   SettingsDTO,
   SettingsInput,
   StoreDTO,
+  TelegramChatDTO,
+  TelegramSettings,
+  TelegramStatusDTO,
   WatchItemDTO,
   WatchItemInput,
   WhatsAppGroupDTO,
@@ -230,11 +234,12 @@ export const api = {
   listAlerts: () => request<AlertsDTO>('GET', '/alerts'),
   deleteAlert: (id: string) => request<void>('DELETE', `/alerts/${encodeURIComponent(id)}`),
 
-  // WhatsApp
-  messages: (status?: MessageDTO['status']) => request<MessageDTO[]>('GET', `/messages${qs({ status })}`),
+  // Mensagens para os grupos (WhatsApp e Telegram)
+  messages: (status?: MessageDTO['status'], channel?: MessageChannel) =>
+    request<MessageDTO[]>('GET', `/messages${qs({ status, channel })}`),
   updateMessage: (id: string, input: MessageUpdateInput) =>
     request<MessageDTO>('PATCH', `/messages/${encodeURIComponent(id)}`, input),
-  /** Manda na hora pelo WAHA. Em erro, o ApiError traz a mensagem atualizada em `data.message`. */
+  /** Manda na hora pelo canal da mensagem. Em erro, o ApiError traz a mensagem atualizada em `data.message`. */
   sendMessage: (id: string) => request<MessageDTO>('POST', `/messages/${encodeURIComponent(id)}/send`),
 
   // Envio automático (WAHA)
@@ -246,6 +251,13 @@ export const api = {
   whatsappGroups: () => request<WhatsAppGroupDTO[]>('GET', '/whatsapp/groups'),
   saveSender: (input: SenderSettings) => request<WhatsAppStatusDTO>('PUT', '/whatsapp/settings', input),
   whatsappTest: (target: 'me' | 'group') => request<{ ok: true }>('POST', '/whatsapp/test', { target }),
+
+  // Envio automático (bot do Telegram)
+  telegramStatus: () => request<TelegramStatusDTO>('GET', '/telegram/status'),
+  /** Grupos e canais onde o bot apareceu nas últimas 24 h. */
+  telegramChats: () => request<TelegramChatDTO[]>('GET', '/telegram/chats'),
+  saveTelegram: (input: TelegramSettings) => request<TelegramStatusDTO>('PUT', '/telegram/settings', input),
+  telegramTest: () => request<{ ok: true }>('POST', '/telegram/test'),
 
   // Configurações
   settings: () => request<SettingsDTO>('GET', '/settings'),

@@ -14,7 +14,7 @@
         com rótulo 4.9:1; o petróleo #072C2C do stitch é o fundo inverso.
   type: Mona Sans (sorteada em library/type.json para software), display 500.
 #}
-{% from "partials/_macros.njk" import waIcon %}
+{% from "partials/_macros.njk" import waIcon, tgIcon %}
 <html lang="pt-BR" data-type="software" data-radius="soft" data-ground="sky" data-buttons="arrow" data-motion>
 <head>
 <meta charset="utf-8">
@@ -88,6 +88,12 @@
     <div class="nav__actions nav__actions--wa">
       <a class="btn btn--primary btn--wa" href="{{ site.whatsappInvite }}" target="_blank" rel="noopener">{{ waIcon() }}<span>Grupo<span class="btn--wa__long"> do WhatsApp</span></span></a>
     </div>
+    {# A barra tem um botão só: o Telegram entra nela quando não há convite do WhatsApp
+       (com os dois, ele aparece na faixa da loja, no rodapé e nas perguntas). #}
+    {% elif site.telegramInvite %}
+    <div class="nav__actions nav__actions--wa">
+      <a class="btn btn--primary btn--tg" href="{{ site.telegramInvite }}" target="_blank" rel="noopener">{{ tgIcon() }}<span>Telegram</span></a>
+    </div>
     {% else %}
     <div class="nav__actions">
       <a class="btn btn--primary" href="/#ofertas">Ver as promoções</a>
@@ -112,8 +118,8 @@
           <p class="t-lead">{% if lastRunAt %}Última coleta às {{ lastRunAt | hourBR }} ({{ lastRunAt | ago }}).{% endif %}{% if nextRunAt %} A próxima sai às {{ nextRunAt | hourBR }}{% if collectEvery < 60 %}: nesta Black Friday, a cada {{ collectEvery }} minutos{% endif %}.{% endif %}</p>
         </div>
         <div class="btn-row">
-          {% if site.whatsappInvite %}<a class="btn btn--primary btn--wa" href="{{ site.whatsappInvite }}" target="_blank" rel="noopener">{{ waIcon() }}Entrar no grupo<span class="xs-hide"> do WhatsApp</span></a>{% endif %}
-          <a class="btn {{ 'btn--secondary' if site.whatsappInvite else 'btn--primary' }}" href="/#ofertas">Ver as promoções<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+          {% if site.whatsappInvite %}<a class="btn btn--primary btn--wa" href="{{ site.whatsappInvite }}" target="_blank" rel="noopener">{{ waIcon() }}<span>Entrar no grupo<span class="xs-hide"> do WhatsApp</span></span></a>{% elif site.telegramInvite %}<a class="btn btn--primary btn--tg" href="{{ site.telegramInvite }}" target="_blank" rel="noopener">{{ tgIcon() }}<span>Entrar<span class="xs-hide"> no Telegram</span></span></a>{% endif %}
+          <a class="btn {{ 'btn--secondary' if (site.whatsappInvite or site.telegramInvite) else 'btn--primary' }}" href="/#ofertas">Ver as promoções<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
         </div>
       </div>
       <p class="close__word" aria-hidden="true" translate="no">{{ site.title }}</p>
@@ -124,7 +130,7 @@
           <a class="nav__logo" href="/#top" translate="no"><span class="mark" data-mark="dots" aria-hidden="true"></span>{{ site.title }}</a>
           <p class="footer__lede">Preço conferido nas lojas, com histórico: desconto de verdade, sem "metade do dobro".</p>
         </div>
-        <div class="span-2 footer__col"><h3>Promoções</h3><ul><li><a href="/#ofertas">Menores preços</a></li>{% if site.whatsappInvite %}<li><a href="{{ site.whatsappInvite }}" rel="noopener">Grupo do WhatsApp</a></li>{% endif %}</ul></div>
+        <div class="span-2 footer__col"><h3>Promoções</h3><ul><li><a href="/#ofertas">Menores preços</a></li>{% if site.whatsappInvite %}<li><a href="{{ site.whatsappInvite }}" rel="noopener">Grupo do WhatsApp</a></li>{% endif %}{% if site.telegramInvite %}<li><a href="{{ site.telegramInvite }}" rel="noopener">Telegram</a></li>{% endif %}</ul></div>
         <div class="span-2 footer__col"><h3>Como funciona</h3><ul><li><a href="/#como-funciona">Os 3 passos</a></li><li><a href="/#como-funciona">As lojas</a></li></ul></div>
         <div class="span-2 footer__col"><h3>Selos</h3><ul><li><a href="/#selos">Desconto real</a></li><li><a href="/#selos">Preço “de” inflado</a></li></ul></div>
         <div class="span-2 footer__col"><h3>Perguntas</h3><ul><li><a href="/#perguntas">Perguntas frequentes</a></li><li><a href="/painel">Painel</a></li></ul></div>

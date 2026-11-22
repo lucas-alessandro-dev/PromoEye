@@ -12,6 +12,7 @@ import { ItemDetail } from './pages/ItemDetail'
 import { Offers } from './pages/Offers'
 import { Stores } from './pages/Stores'
 import { WhatsApp } from './pages/WhatsApp'
+import { Telegram } from './pages/Telegram'
 import { Settings } from './pages/Settings'
 import { ProductDetail, Products } from './pages/Products'
 import { Alerts } from './pages/Alerts'
@@ -35,6 +36,7 @@ function Gate() {
           <Route path="catalogo/:id" element={<ProductDetail />} />
           <Route path="alertas" element={<Alerts />} />
           <Route path="whatsapp" element={<WhatsApp />} />
+          <Route path="telegram" element={<Telegram />} />
           <Route path="configuracoes" element={<Settings />} />
           <Route
             path="*"

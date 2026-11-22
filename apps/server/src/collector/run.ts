@@ -1,9 +1,9 @@
-import { formatWhatsAppMessage } from '@promoeye/shared'
+import { formatWhatsAppMessage, type MessageChannel } from '@promoeye/shared'
 import type { Offer, Store, WatchItem } from '@prisma/client'
 import { config, publicUrl } from '../config.js'
 import { BlockedError, sleep } from '../lib/http.js'
 import { num, numReq, prisma } from '../lib/prisma.js'
-import { autoQueueEnabled, getSettings } from '../services/settings.js'
+import { autoQueueEnabled, getSettings, telegramAutoQueueEnabled, telegramDraftEnabled } from '../services/settings.js'
 import { adapterFor } from './adapters/index.js'
 import { matchOffer, outlierCut, requiredTerms, sellerAllowed, type MatchRules, type SellerRules } from './matcher.js'
 import { containsTerm, normalize } from '../lib/text.js'
@@ -464,11 +464,16 @@ async function processItem(
 
   // 6. Rascunho para o grupo: só a oferta mais barata do item, e só se for
   //    promoção e mais barata que a última que já mandamos. Assim o grupo não
-  //    recebe cinco mensagens do mesmo iPhone em cores diferentes.
-  if (settings.whatsapp.autoDraft && best?.isDeal) {
-    await draftForBestDeal(item, best.offer.id)
+  //    recebe cinco mensagens do mesmo iPhone em cores diferentes. Cada canal
+  //    (WhatsApp, Telegram) tem a sua mensagem e a sua regra de repetição.
+  if (best?.isDeal) {
+    if (settings.whatsapp.autoDraft) await draftForBestDeal(item, best.offer.id)
+    if (await telegramDraftEnabled()) await draftForBestDeal(item, best.offer.id, { channel: 'telegram' })
   }
 }
+
+/** Parâmetro do /ir/ que diz de onde veio o clique (go.ts). */
+const CLICK_PARAM: Record<MessageChannel, string> = { whatsapp: 'wa', telegram: 'tg' }
 
 /**
  * Monta a mensagem do grupo para a oferta. Com o envio automático ligado ela
@@ -479,16 +484,17 @@ async function processItem(
 export async function draftForBestDeal(
   item: WatchItem,
   offerId: string,
-  opts: { force?: boolean } = {}
+  opts: { force?: boolean; channel?: MessageChannel } = {}
 ): Promise<boolean> {
   const force = opts.force ?? false
+  const channel = opts.channel ?? 'whatsapp'
   const offer = await prisma.offer.findUnique({ where: { id: offerId }, include: { store: true } })
   if (!offer) return false
   const price = numReq(offer.price)
 
   if (!force) {
     const last = await prisma.outboundMessage.findFirst({
-      where: { offer: { watchItemId: item.id } },
+      where: { channel, offer: { watchItemId: item.id } },
       orderBy: { createdAt: 'desc' },
     })
     const lastPrice = num(last?.price)
@@ -507,25 +513,31 @@ export async function draftForBestDeal(
     listPrice: num(offer.listPrice),
     installments: offer.installments,
     flags: offer.flags,
-    link: `${publicUrl}/ir/${offer.id}?c=wa`,
+    link: `${publicUrl}/ir/${offer.id}?c=${CLICK_PARAM[channel]}`,
     realDiscountPct: offer.realDiscountPct,
   })
-  const queue = !force && (await autoQueueEnabled())
+  const queue = !force && (channel === 'telegram' ? await telegramAutoQueueEnabled() : await autoQueueEnabled())
   const created = await prisma.outboundMessage.create({
-    data: { offerId: offer.id, price, reason, body, status: queue ? 'QUEUED' : 'DRAFT', queuedAt: queue ? new Date() : null },
+    data: { channel, offerId: offer.id, price, reason, body, status: queue ? 'QUEUED' : 'DRAFT', queuedAt: queue ? new Date() : null },
   })
-  // No máximo UMA mensagem ativa por item: a nova (mais barata) substitui as
-  // que ainda esperavam. O botão "Gerar mensagem" (force) não mexe nas outras:
-  // quem pediu quer comparar antes de decidir.
-  if (!force) await supersedeOlderMessages(item.id, created.id, created.createdAt)
+  // No máximo UMA mensagem ativa por item em cada canal: a nova (mais barata)
+  // substitui as que ainda esperavam. O botão "Gerar mensagem" (force) não
+  // mexe nas outras: quem pediu quer comparar antes de decidir.
+  if (!force) await supersedeOlderMessages(item.id, created.id, created.createdAt, channel)
   return true
 }
 
-/** Rascunhos e mensagens na fila do mesmo item, mais velhos que `keepId`, viram DISCARDED com o motivo. */
-export async function supersedeOlderMessages(watchItemId: string, keepId: string, before: Date): Promise<number> {
+/** Rascunhos e mensagens na fila do mesmo item e canal, mais velhos que `keepId`, viram DISCARDED com o motivo. */
+export async function supersedeOlderMessages(
+  watchItemId: string,
+  keepId: string,
+  before: Date,
+  channel: MessageChannel = 'whatsapp'
+): Promise<number> {
   const res = await prisma.outboundMessage.updateMany({
     where: {
       id: { not: keepId },
+      channel,
       status: { in: ['DRAFT', 'QUEUED'] },
       createdAt: { lte: before },
       offer: { watchItemId },

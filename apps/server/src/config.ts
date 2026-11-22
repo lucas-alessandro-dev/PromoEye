@@ -88,6 +88,16 @@ const envSchema = z.object({
     .default('default'),
 
   /**
+   * Bot do Telegram para postar no grupo ou canal (crie com o @BotFather).
+   * É segredo: quem tem o token posta em nome do bot. Vazio desliga o canal.
+   */
+  TELEGRAM_BOT_TOKEN: z
+    .string()
+    .trim()
+    .default('')
+    .refine((v) => v === '' || /^\d{5,15}:[\w-]{30,60}$/.test(v), 'TELEGRAM_BOT_TOKEN: cole o token inteiro que o @BotFather mostrou (123456789:AA…)'),
+
+  /**
    * E-mail dos alertas "me avise quando baixar" (Brevo, Amazon SES, Resend,
    * Mailgun… qualquer SMTP). Ex.: smtps://usuario:senha@smtp-relay.brevo.com:465
    * Vazio desliga os alertas: o formulário some da vitrine e nada é enviado.

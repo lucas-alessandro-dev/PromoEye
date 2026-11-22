@@ -14,6 +14,7 @@ const NAV = [
   { to: '/catalogo', label: 'Catálogo' },
   { to: '/alertas', label: 'Alertas' },
   { to: '/whatsapp', label: 'WhatsApp' },
+  { to: '/telegram', label: 'Telegram' },
   { to: '/configuracoes', label: 'Configurações' },
 ]
 

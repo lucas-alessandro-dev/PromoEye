@@ -13,6 +13,7 @@ const FIELD_MESSAGES: Record<string, string> = {
   siteTitle: 'Use de 2 a 60 caracteres',
   defaultMinDiscountPct: 'Use um número de 0 a 95, sem o %',
   'whatsapp.groupInviteUrl': 'Use um convite https://chat.whatsapp.com/...',
+  'telegram.inviteUrl': 'Use um convite https://t.me/... (o @ do canal ou o link de convite)',
 }
 
 export function Settings() {
@@ -187,6 +188,29 @@ export function Settings() {
                     Uma mensagem por item, só da oferta mais barata e só quando o preço cai abaixo da última mensagem. Desligado,
                     o envio automático também para. Conexão do número e envio automático ficam em{' '}
                     <Link to="/whatsapp">WhatsApp</Link>.
+                  </>
+                }
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="card" aria-labelledby="h-tg">
+          <h2 id="h-tg">Telegram</h2>
+          <div className="form-grid">
+            <div className="span-2">
+              <TextField
+                label="Convite do grupo ou canal"
+                type="url"
+                inputMode="url"
+                value={form.telegram.inviteUrl}
+                onChange={(e) => setForm((f) => (f ? { ...f, telegram: { ...f.telegram, inviteUrl: e.target.value } } : f))}
+                error={errors['telegram.inviteUrl']}
+                placeholder="https://t.me/seucanal ou https://t.me/+AbC123…"
+                hint={
+                  <>
+                    Aparece na vitrine ao lado do WhatsApp (ou no lugar dele, se não houver convite do WhatsApp). Deixe em branco para
+                    esconder. O bot e o envio automático ficam em <Link to="/telegram">Telegram</Link>.
                   </>
                 }
               />

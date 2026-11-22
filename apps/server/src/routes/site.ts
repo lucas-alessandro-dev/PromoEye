@@ -135,6 +135,7 @@ export async function baseContext() {
       disclosure: settings.affiliateDisclosure,
       allowIndexing: settings.allowIndexing,
       whatsappInvite: settings.whatsapp.groupInviteUrl || null,
+      telegramInvite: settings.telegram.inviteUrl || null,
       // canonical só com domínio de verdade (a skill pede: nada de localhost).
       canonical: !/localhost|127\.0\.0\.1/.test(publicUrl),
     },

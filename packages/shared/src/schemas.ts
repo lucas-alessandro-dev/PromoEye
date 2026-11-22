@@ -415,12 +415,18 @@ export interface DashboardDTO {
   blackFriday: { date: string; days: number }
   /** Só com o envio automático ligado: o painel avisa se o WhatsApp caiu. */
   whatsapp: { autoSend: boolean; state: WhatsAppState | null }
+  /** O mesmo para o Telegram; `queued` é a fila dele (a de `counts` é a do WhatsApp). */
+  telegram: { autoSend: boolean; state: TelegramState | null; queued: number }
 }
 
 // ── WhatsApp ────────────────────────────────────────────────────────────────
 
 export const MESSAGE_STATUSES = ['DRAFT', 'QUEUED', 'SENDING', 'SENT', 'DISCARDED', 'FAILED'] as const
 export type MessageStatus = (typeof MESSAGE_STATUSES)[number]
+
+/** Para onde a mensagem vai. Cada canal tem fila, limite e regra de repetição próprios. */
+export const MESSAGE_CHANNELS = ['whatsapp', 'telegram'] as const
+export type MessageChannel = (typeof MESSAGE_CHANNELS)[number]
 
 export interface MessageDTO {
   id: string
@@ -518,6 +524,71 @@ export const pairInput = z.object({
 
 export const testSendInput = z.object({ target: z.enum(['me', 'group']) })
 
+// ── Telegram ────────────────────────────────────────────────────────────────
+
+/**
+ * Onde o bot posta: o id do grupo, supergrupo ou canal (-100…, como o Telegram
+ * devolve) ou o @ de um canal público. Ao salvar, o servidor confere com o
+ * Telegram e guarda o id numérico, que não muda se o @ mudar.
+ */
+export const telegramChatId = z
+  .string()
+  .trim()
+  .max(64)
+  .refine(
+    (v) => v === '' || /^-?\d{5,20}$/.test(v) || /^@[A-Za-z][A-Za-z0-9_]{3,31}$/.test(v),
+    'Use o id do grupo (-100…) ou o @ do canal'
+  )
+
+/** Envio pelo bot do Telegram. Fica numa chave própria, como o do WhatsApp. */
+export const telegramSettingsInput = z.object({
+  /** Promoção nova vai direto para a fila, sem esperar você revisar. */
+  autoSend: z.boolean(),
+  chatId: telegramChatId,
+  chatTitle: z.string().trim().max(200),
+  /** Manda a foto do produto com o texto na legenda. Sem foto, vai só o texto. */
+  withImage: z.boolean(),
+  /** Bot oficial não corre risco de bloqueio como número comum; o teto é pelo grupo. */
+  maxPerHour: z.coerce.number().int().min(1, 'Use de 1 a 60').max(60, 'Use de 1 a 60'),
+  quietHours: z.boolean(),
+  quietStart: hour,
+  quietEnd: hour,
+})
+export type TelegramSettings = z.infer<typeof telegramSettingsInput>
+
+/**
+ * - UNCONFIGURED: o servidor não tem TELEGRAM_BOT_TOKEN;
+ * - INVALID_TOKEN: tem, mas o Telegram recusou;
+ * - UNREACHABLE: o Telegram não respondeu;
+ * - READY: o bot está no ar.
+ */
+export type TelegramState = 'UNCONFIGURED' | 'INVALID_TOKEN' | 'UNREACHABLE' | 'READY'
+
+export type TelegramChatType = 'group' | 'supergroup' | 'channel'
+
+export interface TelegramChatDTO {
+  id: string
+  title: string
+  type: TelegramChatType
+  /** @ do grupo ou canal público, sem o @. */
+  username: string | null
+}
+
+export interface TelegramStatusDTO {
+  state: TelegramState
+  /** O bot do token, conferido agora. */
+  bot: { username: string; name: string } | null
+  error: string | null
+  settings: TelegramSettings
+  /** O grupo escolhido, conferido agora. null = nenhum escolhido ou bot fora do ar. */
+  chat: { title: string; type: TelegramChatType | null; canPost: boolean; problem: string | null } | null
+  queue: { queued: number; failed: number; sentLastHour: number }
+  quietNow: boolean
+  quietOff: TimeWindowDTO | null
+  /** Bot no ar, grupo escolhido e com permissão de postar: dá para enviar. */
+  ready: boolean
+}
+
 // ── Configurações ───────────────────────────────────────────────────────────
 
 export const settingsInput = z.object({
@@ -547,6 +618,22 @@ export const settingsInput = z.object({
      */
     autoDraft: z.boolean(),
   }),
+  /**
+   * Convite do grupo ou canal do Telegram, mostrado na vitrine ao lado do
+   * WhatsApp. `default` para configurações salvas antes de existir o campo.
+   */
+  telegram: z
+    .object({
+      inviteUrl: z
+        .string()
+        .trim()
+        .max(300)
+        .refine(
+          (v) => v === '' || /^https:\/\/(t\.me|telegram\.me)\/(\+|joinchat\/)?[A-Za-z0-9_-]{4,64}\/?$/.test(v),
+          'Use um convite https://t.me/...'
+        ),
+    })
+    .default({ inviteUrl: '' }),
   alerts: z.object({
     /** Formulário "me avise quando baixar" na página do item. Só aparece com SMTP_URL no .env. */
     enabled: z.boolean(),

@@ -69,7 +69,7 @@
           {% endif %}
           <p class="buy__note">Preço à vista{% if item.lastRunAt %}, coleta das {{ item.lastRunAt | hourBR }}{% endif %}. Pode mudar na loja até a próxima coleta{% if collectEvery < 60 %} (a cada {{ collectEvery }} min nesta Black Friday){% endif %}. Alguns links são de afiliado; o preço para você é o mesmo.</p>
         </div>
-        {% if alertBox %}{{ alertForm(alertBox, site.whatsappInvite) }}{% endif %}
+        {% if alertBox %}{{ alertForm(alertBox, site.whatsappInvite, site.telegramInvite) }}{% endif %}
       </div>
     </section>
 

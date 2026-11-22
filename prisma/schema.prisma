@@ -269,7 +269,7 @@ model Click {
   at       DateTime @default(now())
   /// Só o domínio de origem; nada de IP (LGPD).
   referrer String?
-  channel  String? // "site" | "whatsapp" | "email"
+  channel  String? // "site" | "whatsapp" | "telegram" | "email"
 
   @@index([offerId, at])
 }
@@ -288,6 +288,7 @@ enum MessageStatus {
 /// horário de silêncio (apps/server/src/services/whatsapp/queue.ts).
 model OutboundMessage {
   id         String        @id @default(cuid())
+  /// "whatsapp" | "telegram": cada canal tem fila, limite e regra de repetição próprios.
   channel    String        @default("whatsapp")
   offerId    String?
   offer      Offer?        @relation(fields: [offerId], references: [id], onDelete: SetNull)
@@ -301,7 +302,7 @@ model OutboundMessage {
   attempts   Int           @default(0)
   /// Quando entrou na fila: a ordem de envio e o prazo de validade contam daqui.
   queuedAt   DateTime?
-  /// Id da mensagem no WhatsApp, devolvido pelo WAHA.
+  /// Id da mensagem no WhatsApp (devolvido pelo WAHA) ou no Telegram.
   providerId String?
   createdAt  DateTime      @default(now())
   sentAt     DateTime?

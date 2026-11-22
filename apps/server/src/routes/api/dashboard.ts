@@ -1,13 +1,14 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { daysUntilBlackFriday, type DashboardDTO, type WhatsAppState } from '@promoeye/shared'
+import { daysUntilBlackFriday, type DashboardDTO, type TelegramState, type WhatsAppState } from '@promoeye/shared'
 import { prisma } from '../../lib/prisma.js'
 import { parse } from '../../lib/validate.js'
 import { AlreadyRunningError, currentRun, FRESH_MS, startCollection } from '../../collector/run.js'
 import { nextRunAt, scheduleEnabled } from '../../collector/scheduler.js'
 import { peakEveryMin, peakWindow, windowDTO } from '../../lib/peak.js'
 import { offerDTO, offerInclude, runDTO, storeDTO } from '../../services/dto.js'
-import { getSenderSettings } from '../../services/settings.js'
+import { getSenderSettings, getTelegramSettings } from '../../services/settings.js'
+import { telegram, telegramConfigured, TelegramError } from '../../services/telegram/bot.js'
 import { stateOf, waha, wahaConfigured } from '../../services/whatsapp/waha.js'
 
 /**
@@ -34,20 +35,41 @@ async function whatsappSummary(): Promise<DashboardDTO['whatsapp']> {
   return { autoSend: true, state }
 }
 
+/** O mesmo para o Telegram: bot recusado ou fora do ar com o envio ligado vira aviso no painel. */
+async function telegramSummary(): Promise<DashboardDTO['telegram']> {
+  const [settings, queued] = await Promise.all([
+    getTelegramSettings(),
+    prisma.outboundMessage.count({ where: { channel: 'telegram', status: 'QUEUED' } }),
+  ])
+  if (!settings.autoSend) return { autoSend: false, state: null, queued }
+  if (!telegramConfigured()) return { autoSend: true, state: 'UNCONFIGURED', queued }
+  const timeout = new Promise<'UNREACHABLE'>((r) => setTimeout(() => r('UNREACHABLE'), 3000).unref())
+  const state = await Promise.race([
+    telegram()
+      .getMe()
+      .then((): TelegramState => 'READY')
+      .catch((err: unknown): TelegramState =>
+        err instanceof TelegramError && (err.status === 401 || err.status === 404) ? 'INVALID_TOKEN' : 'UNREACHABLE'
+      ),
+    timeout,
+  ])
+  return { autoSend: true, state, queued }
+}
+
 export async function dashboardRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
 
   app.get('/dashboard', async (): Promise<DashboardDTO> => {
     const fresh = new Date(Date.now() - FRESH_MS)
     const freshWhere = { hidden: false, OR: [{ source: 'MANUAL' as const }, { lastSeenAt: { gte: fresh } }] }
-    const [lastRun, items, activeItems, offers, deals, drafts, queued, clicks7d, topDeals, stores, whatsapp] = await Promise.all([
+    const [lastRun, items, activeItems, offers, deals, drafts, queued, clicks7d, topDeals, stores, whatsapp, telegramInfo] = await Promise.all([
       prisma.collectorRun.findFirst({ orderBy: { startedAt: 'desc' } }),
       prisma.watchItem.count(),
       prisma.watchItem.count({ where: { active: true } }),
       prisma.offer.count({ where: freshWhere }),
       prisma.offer.count({ where: { ...freshWhere, isDeal: true } }),
-      prisma.outboundMessage.count({ where: { status: 'DRAFT' } }),
-      prisma.outboundMessage.count({ where: { status: 'QUEUED' } }),
+      prisma.outboundMessage.count({ where: { channel: 'whatsapp', status: 'DRAFT' } }),
+      prisma.outboundMessage.count({ where: { channel: 'whatsapp', status: 'QUEUED' } }),
       prisma.click.count({ where: { at: { gte: new Date(Date.now() - 7 * 86_400_000) } } }),
       prisma.offer.findMany({
         where: { ...freshWhere, available: true, isDeal: true },
@@ -57,6 +79,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       }),
       prisma.store.findMany({ orderBy: { sortOrder: 'asc' }, include: { _count: { select: { offers: true } } } }),
       whatsappSummary(),
+      telegramSummary(),
     ])
     const bf = daysUntilBlackFriday()
     return {
@@ -70,6 +93,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       stores: stores.map(storeDTO),
       blackFriday: { date: bf.date.toISOString(), days: bf.days },
       whatsapp,
+      telegram: telegramInfo,
     }
   })
 

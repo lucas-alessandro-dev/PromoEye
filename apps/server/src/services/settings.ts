@@ -3,11 +3,14 @@ import {
   DEFAULT_TRUSTED_SELLERS,
   senderSettingsInput,
   settingsInput,
+  telegramSettingsInput,
   type SenderSettings,
   type SettingsDTO,
   type SettingsInput,
+  type TelegramSettings,
 } from '@promoeye/shared'
 import { prisma } from '../lib/prisma.js'
+import { telegramConfigured } from './telegram/bot.js'
 import { wahaConfigured } from './whatsapp/waha.js'
 
 export const DEFAULT_SETTINGS: SettingsInput = {
@@ -23,6 +26,9 @@ export const DEFAULT_SETTINGS: SettingsInput = {
   whatsapp: {
     groupInviteUrl: '',
     autoDraft: true,
+  },
+  telegram: {
+    inviteUrl: '',
   },
   // Ligado, mas só aparece de verdade com SMTP_URL no .env.
   alerts: {
@@ -45,12 +51,29 @@ export const DEFAULT_SENDER: SenderSettings = {
   quietEnd: 8,
 }
 
+/**
+ * Telegram: também começa desligado, com o mesmo silêncio das 22h às 8h. As
+ * mensagens só são geradas depois que você escolhe o grupo.
+ */
+export const DEFAULT_TELEGRAM: TelegramSettings = {
+  autoSend: false,
+  chatId: '',
+  chatTitle: '',
+  withImage: true,
+  maxPerHour: 10,
+  quietHours: true,
+  quietStart: 22,
+  quietEnd: 8,
+}
+
 const KEY = 'app'
 const SENDER_KEY = 'whatsapp.sender'
+const TELEGRAM_KEY = 'telegram.sender'
 const TTL = 10_000
 
 let cache: { value: SettingsInput; at: number } | null = null
 let senderCache: { value: SenderSettings; at: number } | null = null
+let telegramCache: { value: TelegramSettings; at: number } | null = null
 
 /** Configurações com os padrões por baixo — campo novo nunca chega undefined. */
 export async function getSettings(): Promise<SettingsInput> {
@@ -61,6 +84,7 @@ export async function getSettings(): Promise<SettingsInput> {
     ...DEFAULT_SETTINGS,
     ...stored,
     whatsapp: { ...DEFAULT_SETTINGS.whatsapp, ...(stored.whatsapp ?? {}) },
+    telegram: { ...DEFAULT_SETTINGS.telegram, ...(stored.telegram ?? {}) },
     alerts: { ...DEFAULT_SETTINGS.alerts, ...(stored.alerts ?? {}) },
   }
   const parsed = settingsInput.safeParse(merged)
@@ -113,4 +137,40 @@ export async function autoQueueEnabled(): Promise<boolean> {
   if (!wahaConfigured()) return false
   const s = await getSenderSettings()
   return s.autoSend && s.groupId !== ''
+}
+
+export async function getTelegramSettings(): Promise<TelegramSettings> {
+  if (telegramCache && Date.now() - telegramCache.at < TTL) return telegramCache.value
+  const row = await prisma.setting.findUnique({ where: { key: TELEGRAM_KEY } })
+  const parsed = telegramSettingsInput.safeParse({ ...DEFAULT_TELEGRAM, ...((row?.value ?? {}) as object) })
+  const value = parsed.success ? parsed.data : DEFAULT_TELEGRAM
+  telegramCache = { value, at: Date.now() }
+  return value
+}
+
+export async function saveTelegramSettings(input: TelegramSettings): Promise<TelegramSettings> {
+  await prisma.setting.upsert({
+    where: { key: TELEGRAM_KEY },
+    create: { key: TELEGRAM_KEY, value: input as object },
+    update: { value: input as object },
+  })
+  telegramCache = null
+  return getTelegramSettings()
+}
+
+/**
+ * Gera mensagem para o Telegram? Só com o bot configurado e o grupo escolhido.
+ * Não depende do "Gerar mensagem" das Configurações, que é do WhatsApp: um
+ * canal parado não para o outro.
+ */
+export async function telegramDraftEnabled(): Promise<boolean> {
+  if (!telegramConfigured()) return false
+  return (await getTelegramSettings()).chatId !== ''
+}
+
+/** Promoção nova do Telegram vai direto para a fila? */
+export async function telegramAutoQueueEnabled(): Promise<boolean> {
+  if (!telegramConfigured()) return false
+  const s = await getTelegramSettings()
+  return s.autoSend && s.chatId !== ''
 }

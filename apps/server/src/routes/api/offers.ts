@@ -169,7 +169,7 @@ export async function offerRoutes(app: FastifyInstance) {
     if (!offer) return reply.code(404).send({ error: 'Oferta não encontrada.' })
     await draftForBestDeal(offer.watchItem, offer.id, { force: true })
     const msg = await prisma.outboundMessage.findFirst({
-      where: { offerId: offer.id },
+      where: { offerId: offer.id, channel: 'whatsapp' },
       orderBy: { createdAt: 'desc' },
       include: { offer: { include: { store: { select: { name: true } } } } },
     })

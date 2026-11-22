@@ -15,7 +15,7 @@
 ## 2. Arquitetura
 
 - Monorepo npm workspaces, TypeScript, Node ≥ 22.
-  - `apps/server`: Fastify. Vitrine SSR (Nunjucks), API do painel (`/api/admin/*`), redirecionamento rastreado `/ir/<id>`, coletor e agendador (croner), fila do WhatsApp (WAHA), alertas por e-mail.
+  - `apps/server`: Fastify. Vitrine SSR (Nunjucks), API do painel (`/api/admin/*`), redirecionamento rastreado `/ir/<id>`, coletor e agendador (croner), filas do WhatsApp (WAHA) e do Telegram (bot), alertas por e-mail.
   - `apps/admin`: React + Vite em `/painel`.
   - `packages/shared`: contratos zod, selos, formatação, catálogo de lojas, mensagem do WhatsApp, GTIN (`gtin.ts`).
 - PostgreSQL + Prisma. Modelos: `Store`, `WatchItem`, `Offer`, `PricePoint`, `ItemSnapshot`, `Product`, `PriceAlert`, `CollectorRun`, `Click`, `OutboundMessage`, `Setting`, `AdminUser`, `AdminSession`.
@@ -49,7 +49,7 @@
 
 ### 3.6 Afiliados e `/ir/<id>`
 - Prioridade: link colado na oferta → modelo da loja (`tag=...`, rede com `{url}`/`{url_encoded}`/`{id}`, ou loja de afiliado com `{path}`, como `https://www.magazinevoce.com.br/magazinepromoeye{path}`) → URL limpa. A regra fica em `packages/shared/src/affiliate.ts` (servidor e prévia do painel usam a mesma). URL inteira sem marcador é recusada no painel e ignorada no `/ir/`.
-- Clique sem IP; canal `site`, `whatsapp` (`?c=wa`) ou `email` (`?c=email`). Só redireciona para https.
+- Clique sem IP; canal `site`, `whatsapp` (`?c=wa`), `telegram` (`?c=tg`) ou `email` (`?c=email`). Só redireciona para https.
 - Verificação: `npm run check:affiliates [-- --live]` ou Painel › Lojas.
 
 ### 3.7 WhatsApp (WAHA, motor GOWS)
@@ -57,7 +57,13 @@
 - Uma por vez, ≥1 min com jitter, teto por hora (padrão 10), silêncio 22h–8h (suspenso em `QUIET_OFF_*`). Antes de enviar, confere preço, estoque e se há mensagem mais nova.
 - **Sem mensagens 1:1 automáticas** do número do grupo (risco de bloqueio). Alerta individual é por e-mail.
 
-### 3.8 Alertas por e-mail (`PriceAlert`, `services/alerts/*`)
+### 3.8 Telegram (Bot API, `services/telegram/*`)
+- Bot oficial (`TELEGRAM_BOT_TOKEN`, criado no @BotFather) posta num grupo ou canal escolhido em Painel › Telegram. Sem token, nada é gerado.
+- `OutboundMessage.channel` separa os canais. **Cada canal tem a sua mensagem, fila, limite e regra de repetição**: toda consulta da fila filtra por `channel`. Sem o filtro, a mensagem de um canal "substitui" (descarta) a do outro.
+- Mesmas regras do 3.7 (`blockedNow`, `staleReason`), teto de 1 a 60 por hora. Erro de configuração (bot fora do grupo, sem permissão, token recusado) deixa a mensagem esperando na fila; 429 espera o `retry_after`; supergrupo novo troca o `chatId` sozinho.
+- O texto fica no formato do WhatsApp e vira HTML na hora de enviar (`whatsappToTelegramHtml`, escapa `< > &`). O token vai na URL: nenhum erro mostra a URL, e o token é trocado por `<token>`.
+
+### 3.9 Alertas por e-mail (`PriceAlert`, `services/alerts/*`)
 - Opt-in duplo, consentimento gravado com o texto exato, cancelamento em um clique (RFC 8058), links assinados com HMAC (`/alertas/<id>/<assinatura>`).
 - Avisa com preço-alvo atingido ou, sem alvo, com `isDeal`. Máximo 1 e-mail a cada 12 h por alerta, e de novo só se cair mais 2%.
 - Ligado só com `SMTP_URL` e `SMTP_FROM`. Sem eles o formulário some.
@@ -67,7 +73,7 @@
 - Tokens "stitch": petróleo `#072C2C`, laranja `#FF5F03` (`#E95603` na vitrine, por contraste AA), areia `#EDEADE`, Mona Sans. Kit da taste-skill em `apps/server/public/assets` (não editar); estilos próprios em `apps/server/public/site/site.css`; peças em `views/partials/_macros.njk`.
 - Rotas públicas (SSR, **100% sem JavaScript**): `/`, `/ofertas/<slug>` (item), `/produtos/<slug>` (produto por EAN), `/alertas/...`, `/sitemap.xml` (itens + produtos com oferta), `/robots.txt`.
 - JSON-LD (`lib/jsonld.ts`): Product + AggregateOffer + BreadcrumbList. Item com 2+ marcas vira ItemList, porque marcar categoria como Product é enganoso. Todo JSON-LD passa por `jsonLdScript`, que escapa `< > &` e os separadores de linha.
-- Painel: Painel, Itens, Ofertas, Lojas (com verificação de afiliados), Catálogo, Alertas, WhatsApp, Configurações.
+- Painel: Painel, Itens, Ofertas, Lojas (com verificação de afiliados), Catálogo, Alertas, WhatsApp, Telegram, Configurações.
 
 ## 5. Estado e backlog
 
@@ -81,11 +87,14 @@
 - Uma mensagem ativa por item na fila do WhatsApp.
 - Verificação de afiliados (CLI e painel); redirecionamento 301 dos domínios antigos no `up.sh`.
 - Domínio definitivo `promoeye.com.br` no ar (19/11/2026), com certificado, 301 do sslip e do `www`, e a fila do WhatsApp já com o link novo.
+- Envio para grupo/canal do Telegram por bot (22/11/2026): fila própria, página no painel, aviso no Painel, clique `?c=tg`. Sem migração (`channel` já existia).
+- Convite do Telegram na vitrine (Configurações › Telegram): faixa da loja, rodapé, perguntas e alerta. O WhatsApp continua sendo o botão da barra; o Telegram só ocupa a barra sem convite do WhatsApp. Sem convite do Telegram, a vitrine fica como antes.
 
 ### Pendente (depende de decisão ou acesso do Lucas)
 - Contratar SMTP (Brevo/SES/Resend) e configurar SPF/DKIM no DNS de `promoeye.com.br` (zona na Hostinger).
 - Cadastrar e validar os afiliados reais (Amazon `tag`, redes para VTEX). Mercado Livre: modelo `matt_word`/`matt_tool` cadastrado em 19/11. Magalu (Influenciador Magalu): loja `https://www.magazinevoce.com.br/magazinepromoeye/`; o link de afiliado de cada oferta manual é o caminho do produto da Magalu depois desse endereço. Nunca colar uma URL inteira no modelo da loja: sem marcador, ela vira parâmetro e o link sai quebrado.
 - Ligar "Deixar o Google indexar" (o domínio definitivo já está no ar).
+- Telegram: criar o bot no @BotFather, pôr `TELEGRAM_BOT_TOKEN` no `.env` da VPS, adicionar o bot ao grupo/canal e escolher em Painel › Telegram. Colar o convite (`https://t.me/...`) em Configurações para ele aparecer na vitrine.
 
 ### Depois da Black Friday
 - Fontes de dados autorizadas para escalar: feeds de redes de afiliados e parcerias (as grandes lojas bloqueiam robô).

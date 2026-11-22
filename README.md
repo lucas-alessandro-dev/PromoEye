@@ -3,7 +3,7 @@
 Confere de hora em hora o preço dos itens que você escolhe, em lojas confiáveis, e separa promoção de verdade do "metade do dobro" da Black Friday. Vitrine pública com link de afiliado, painel para administrar e envio automático das promoções para um grupo de WhatsApp.
 
 - **Vitrine**: `/`, uma listagem no jeito das grandes lojas (busca, categorias, "só promoções", ordenação, um cartão por item com o menor preço). Cada cartão abre `/ofertas/<slug>`: fotos, caixa de compra, **todas as lojas pesquisadas** com a situação de cada uma (preço, esgotado, não encontrado, não respondeu, manual) e o **histórico** do menor preço em 7, 30 ou 90 dias.
-- **Painel**: `/painel`, para itens, ofertas, lojas, afiliados, WhatsApp e configurações.
+- **Painel**: `/painel`, para itens, ofertas, lojas, afiliados, WhatsApp, Telegram e configurações.
 - **Coletor**: roda dentro do servidor, no minuto 5 de cada hora (`COLLECT_CRON`). Na Black Friday, a cada 20 min, e o WhatsApp sem horário de silêncio na virada: [docs/deploy-vps.md](docs/deploy-vps.md#black-friday-26-a-29112026).
 - **Redirecionamento**: `/ir/<id>`. Todo clique para a loja passa por aqui, que aplica o afiliado e conta o clique (sem guardar IP).
 
@@ -26,7 +26,7 @@ Outros comandos:
 | `npm run collect` | uma coleta pelo terminal (`-- <slug>` para um item só) |
 | `npm run probe -- "air fryer"` | testa a busca em cada loja, sem gravar nada |
 | `npm run check:affiliates` | confere o link de afiliado de cada loja (`-- --live` segue os redirecionamentos) |
-| `npm test` | testes (filtro, pontuação, afiliado, parsers das lojas, contrato da API, fila do WhatsApp) |
+| `npm test` | testes (filtro, pontuação, afiliado, parsers das lojas, contrato da API, filas do WhatsApp e do Telegram) |
 | `npm run build` | compila shared, painel e servidor |
 | `node scripts/shoot.mjs <url> <pasta> 1440x900,390x844 --tiles` | capturas da vitrine em Chrome headless |
 
@@ -129,6 +129,22 @@ Por que o WAHA: a API oficial da Meta (Cloud API) cobra por mensagem e não serv
 
 No computador: `docker compose up -d waha`, depois `WAHA_URL=http://localhost:3100` e uma `WAHA_API_KEY` no `.env` (modelo em `.env.example`).
 
+## Telegram
+
+As mesmas promoções vão para um grupo ou canal do Telegram, postadas por um bot pela [Bot API](https://core.telegram.org/bots/api) oficial: gratuita e sem o risco de bloqueio de um número comum.
+
+1. No Telegram, fale com o **@BotFather**, mande `/newbot` e guarde o token.
+2. Ponha `TELEGRAM_BOT_TOKEN=<token>` no `.env` (na VPS, o de `ops/vps`) e suba de novo.
+3. Adicione o bot ao grupo. Num canal, ele precisa ser administrador com permissão de publicar.
+4. Em Painel → Telegram, clique em **Procurar grupos** (ou digite o id `-100…` ou o `@` de um canal público), salve e ligue "Enviar sozinho".
+5. Para o convite aparecer na vitrine, cole o link (`https://t.me/seucanal` ou `https://t.me/+…`) em Configurações → Telegram. Ele entra na faixa da loja, ao lado do WhatsApp, no rodapé, nas perguntas e no formulário de alerta. O botão da barra continua sendo o do WhatsApp; o Telegram só ocupa a barra quando não há convite do WhatsApp.
+
+- Cada canal tem a sua mensagem, com o link `?c=tg` (o clique conta como `telegram`), e a sua regra: só avisa quando ficou mais barato que o último aviso **daquele canal**, e no máximo uma mensagem esperando por item.
+- A fila do Telegram é separada da do WhatsApp, com as mesmas regras: uma por vez, pelo menos 1 min de intervalo, teto por hora (padrão 10, até 60), horário de silêncio e a mesma conferência de preço, estoque e mensagem mais nova antes de enviar. O WhatsApp desconectado não segura o Telegram, e vice-versa.
+- O texto fica guardado no formato do WhatsApp (`*negrito*`, `~riscado~`) e vira HTML na hora de enviar, com `< > &` escapados.
+- Bot removido do grupo, sem permissão ou token recusado: a mensagem espera na fila (até 12 h) e o Painel avisa. Limite do Telegram (429): espera o tempo que ele pede. Grupo que vira supergrupo troca de id: o PromoEye guarda o novo sozinho.
+- O token vai na URL das chamadas ao Telegram, então nenhum erro mostra a URL e qualquer texto devolvido tem o token trocado por `<token>`.
+
 ## Produção
 
 Roda na VPS da Hostinger, que hospeda outros projetos também, atrás de um Caddy compartilhado que cuida do HTTPS. Para atualizar, no Git Bash:
@@ -155,6 +171,7 @@ apps/server     Fastify: vitrine (Nunjucks), API do painel, /ir, coletor e agend
   src/collector   adaptadores das lojas, filtro (matcher), pontuação (scoring), coleta (run)
   src/collector/catalog.ts  liga os anúncios ao produto do mesmo EAN
   src/services/whatsapp  cliente do WAHA e fila de envio automático
+  src/services/telegram  cliente da Bot API do Telegram e fila própria
   src/services/alerts    alertas por e-mail: inscrição, regras, envio, links assinados
   src/lib/jsonld.ts      dados estruturados (Product, AggregateOffer, BreadcrumbList)
 apps/admin      painel React (Vite), servido em /painel

@@ -1,5 +1,5 @@
 {% extends "layout.njk" %}
-{% from "partials/_macros.njk" import productCard, waIcon, storeMark %}
+{% from "partials/_macros.njk" import productCard, waIcon, tgIcon, storeMark %}
 {% set useMoments = true %}
 
 {% block main %}
@@ -24,8 +24,30 @@
     </header>
 
     {# ── 2. O GRUPO DO WHATSAPP: a faixa escura entre a busca e a grade, logo na primeira tela. É para
-          onde vão as promoções escolhidas a dedo; aparece só com o convite configurado no painel. ── #}
-    {% if site.whatsappInvite %}
+          onde vão as promoções escolhidas a dedo; aparece só com o convite configurado no painel.
+          Com o convite do Telegram também, os dois botões ficam lado a lado; só com o Telegram, a faixa é azul. ── #}
+    {% if site.whatsappInvite and site.telegramInvite %}
+    <aside class="wa-cta" aria-labelledby="wa-cta-h">
+      <span class="wa-cta__badge" aria-hidden="true">{{ waIcon() }}</span>
+      <div class="wa-cta__text">
+        <h2 id="wa-cta-h">Promoções escolhidas a dedo, direto no seu WhatsApp ou Telegram</h2>
+        <p>Das ofertas conferidas aqui, só as que valem a pena são enviadas, com o link de cada uma.</p>
+      </div>
+      <div class="wa-cta__actions">
+        <a class="btn btn--primary btn--wa wa-cta__btn" href="{{ site.whatsappInvite }}" target="_blank" rel="noopener">{{ waIcon() }}WhatsApp</a>
+        <a class="btn btn--primary btn--tg wa-cta__btn" href="{{ site.telegramInvite }}" target="_blank" rel="noopener">{{ tgIcon() }}Telegram</a>
+      </div>
+    </aside>
+    {% elif site.telegramInvite %}
+    <aside class="wa-cta wa-cta--tg" aria-labelledby="wa-cta-h">
+      <span class="wa-cta__badge" aria-hidden="true">{{ tgIcon() }}</span>
+      <div class="wa-cta__text">
+        <h2 id="wa-cta-h">Promoções escolhidas a dedo, direto no seu Telegram</h2>
+        <p>Das ofertas conferidas aqui, só as que valem a pena vão para o Telegram, com o link de cada uma.</p>
+      </div>
+      <a class="btn btn--primary btn--tg wa-cta__btn" href="{{ site.telegramInvite }}" target="_blank" rel="noopener">Entrar no Telegram<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+    </aside>
+    {% elif site.whatsappInvite %}
     <aside class="wa-cta" aria-labelledby="wa-cta-h">
       <span class="wa-cta__badge" aria-hidden="true">{{ waIcon() }}</span>
       <div class="wa-cta__text">
@@ -223,7 +245,11 @@
         <div class="faq__item"><h3>De quanto em quanto tempo o preço muda aqui?</h3><p>{% if collectEvery < 60 %}Nesta Black Friday, a cada {{ collectEvery }} minutos.{% else %}De hora em hora, no minuto 5.{% endif %}{% if lastRunAt %} A última coleta foi às {{ lastRunAt | hourBR }}.{% endif %} O preço na loja pode mudar entre uma coleta e outra.</p></div>
         <div class="faq__item"><h3>Quais lojas entram?</h3><p>{{ counts.autoStores }} automaticamente, entre grandes varejistas e lojas oficiais de fabricantes.{% if manualStores.length %} {{ manualStores | join(', ') }} bloqueiam robôs, então as ofertas delas entram à mão.{% endif %}</p></div>
         <div class="faq__item"><h3>Aparece vendedor de marketplace?</h3><p>Só os de uma lista de confiáveis, como Magazine Luiza, Fast Shop e iPlace vendendo na Americanas. Vendedor desconhecido fica de fora.</p></div>
+        {% if site.telegramInvite %}
+        <div class="faq__item"><h3>Como receber as promoções no {% if site.whatsappInvite %}WhatsApp ou no {% endif %}Telegram?</h3>{% if site.whatsappInvite %}<p>Os dois recebem as mesmas promoções, com o link de cada uma.</p><p class="faq__links"><a class="link" href="{{ site.whatsappInvite }}" rel="noopener">Grupo do WhatsApp</a><a class="link" href="{{ site.telegramInvite }}" rel="noopener">Telegram</a></p>{% else %}<p>Pelo Telegram: <a class="link" href="{{ site.telegramInvite }}" rel="noopener">Entrar no Telegram</a></p>{% endif %}</div>
+        {% else %}
         <div class="faq__item"><h3>Como receber as promoções no WhatsApp?</h3><p>{% if site.whatsappInvite %}Pelo grupo: <a class="link" href="{{ site.whatsappInvite }}" rel="noopener">Entrar no grupo do WhatsApp</a>{% else %}O grupo está sendo preparado. Ele vai receber só as promoções de verdade, com o link de cada uma.{% endif %}</p></div>
+        {% endif %}
       </div>
     </div>
   </div>

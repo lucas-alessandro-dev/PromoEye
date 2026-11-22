@@ -17,9 +17,10 @@ export function Dashboard() {
   if (error && !data) return <ErrorBox error={error} onRetry={reload} />
   if (!data) return null
 
-  const { lastRun, nextRunAt, scheduleEnabled, peak, counts, topDeals, stores, whatsapp } = data
+  const { lastRun, nextRunAt, scheduleEnabled, peak, counts, topDeals, stores, whatsapp, telegram } = data
   const cadence = peak?.active ? `a cada ${peak.everyMin} min` : 'de hora em hora'
   const waDown = whatsapp.autoSend && whatsapp.state !== 'WORKING'
+  const tgDown = telegram.autoSend && telegram.state !== 'READY'
 
   return (
     <div className="page">
@@ -37,6 +38,21 @@ export function Dashboard() {
             {whatsapp.state === 'UNREACHABLE' ? ' (o WAHA não respondeu)' : ''}. As promoções estão parando na fila
             {counts.queuedMessages > 0 ? ` (${counts.queuedMessages} agora)` : ''}.{' '}
             <Link to="/whatsapp">Conectar de novo</Link>
+          </p>
+        </div>
+      )}
+
+      {tgDown && (
+        <div className="notice notice-warn" role="alert">
+          <p>
+            O envio automático para o Telegram está ligado, mas o bot{' '}
+            {telegram.state === 'INVALID_TOKEN'
+              ? 'teve o token recusado'
+              : telegram.state === 'UNCONFIGURED'
+                ? 'não está configurado no servidor'
+                : 'não respondeu'}
+            . As promoções estão parando na fila{telegram.queued > 0 ? ` (${telegram.queued} agora)` : ''}.{' '}
+            <Link to="/telegram">Ver o Telegram</Link>
           </p>
         </div>
       )}
@@ -101,6 +117,12 @@ export function Dashboard() {
               <div>
                 <dt>Na fila do WhatsApp</dt>
                 <dd>{counts.queuedMessages}</dd>
+              </div>
+            )}
+            {(telegram.autoSend || telegram.queued > 0) && (
+              <div>
+                <dt>Na fila do Telegram</dt>
+                <dd>{telegram.queued > 0 ? <Link to="/telegram">{telegram.queued}</Link> : 0}</dd>
               </div>
             )}
             <div>

@@ -24,6 +24,13 @@ export function isLinkPreviewBot(ua: string | undefined): boolean {
   return !ua || PREVIEW_BOTS.test(ua)
 }
 
+const CHANNELS: Record<string, string> = { wa: 'whatsapp', tg: 'telegram', email: 'email' }
+
+/** `?c=` do link → canal do clique. Qualquer outra coisa conta como site. */
+export function clickChannel(c: string | undefined): string {
+  return (c && Object.hasOwn(CHANNELS, c) && CHANNELS[c]) || 'site'
+}
+
 export async function goRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string }; Querystring: { c?: string } }>(
     '/ir/:id',
@@ -42,8 +49,8 @@ export async function goRoutes(app: FastifyInstance) {
       } catch {
         referrer = null
       }
-      const channel = request.query.c === 'wa' ? 'whatsapp' : request.query.c === 'email' ? 'email' : 'site'
-      // A prévia do link (WhatsApp, WAHA, redes sociais) abre a URL sozinha;
+      const channel = clickChannel(request.query.c)
+      // A prévia do link (WhatsApp, WAHA, Telegram, redes sociais) abre a URL sozinha;
       // isso não é gente clicando.
       if (!isLinkPreviewBot(request.headers['user-agent'])) {
         prisma.click.create({ data: { offerId: offer.id, referrer, channel } }).catch(() => undefined)

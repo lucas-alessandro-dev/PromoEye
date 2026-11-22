@@ -117,6 +117,45 @@ html[data-buttons] .btn.btn--wa::after { content: none; display: none; }
   .wa-cta p { font-size: 14px; }
 }
 
+/* ══ TELEGRAM ═══════════════════════════════════════════════════════════════════════════════
+   O mesmo botão do WhatsApp, em azul. Só aparece com o convite do Telegram no painel; sem ele, a
+   vitrine fica como antes. Dois azuis:
+     · no fundo claro, #17709F com texto branco (5,45:1; 5,0:1 contra o fundo #F7F5EE);
+     · no fundo escuro (a faixa, o rodapé), o azul do Telegram #2AABEE com tinta escura (7,3:1). */
+:root { --tg: #2AABEE; --tg-deep: #17709F; }
+.btn--tg { --action: var(--tg-deep); --action-ink: #fff; --tg-hover: #135d85; }
+:is(.wa-cta, .ground-inverse) .btn--tg { --action: var(--tg); --action-ink: #04131c; --tg-hover: #5bc4f7; }
+.btn--primary.btn--tg:hover, html:not([data-motion="off"]) .btn--primary.btn--tg:hover { background: var(--tg-hover); }
+html[data-buttons] .btn.btn--tg::after { content: none; display: none; }
+.btn--tg .tg-ic { width: 18px; height: 18px; flex: none; }
+.btn--tg:focus-visible { outline: 2px solid var(--action); outline-offset: 3px; }
+
+/* Só o Telegram: a faixa ganha o brilho e o selo azuis. */
+.wa-cta--tg { background: radial-gradient(90% 160% at 0% 0%, rgb(42 171 238 / .22), transparent 60%), var(--p-inv-bg); }
+.wa-cta--tg .wa-cta__badge { background: var(--tg); box-shadow: 0 0 0 6px rgb(42 171 238 / .16); }
+.wa-cta__badge .tg-ic { width: 26px; height: 26px; margin-left: -2px; }
+
+/* WhatsApp e Telegram: os dois botões lado a lado, cada um com o seu símbolo. */
+.wa-cta__actions { display: flex; gap: 10px; }
+.wa-cta__actions .wa-cta__btn { gap: 8px; padding-inline: 18px; }
+@media (max-width: 899px) {
+  .wa-cta__actions { grid-column: 1 / -1; }
+  .wa-cta__actions .wa-cta__btn { flex: 1 1 0; width: auto; min-width: 0; padding-inline: 14px; }
+}
+@media (max-width: 639px) {
+  .wa-cta--tg .wa-cta__badge { box-shadow: 0 0 0 4px rgb(42 171 238 / .16); }
+  .wa-cta__badge .tg-ic { width: 20px; height: 20px; }
+  .nav:not(.is-open) .nav__actions .btn--tg { gap: 6px; }
+}
+/* Pergunta "Como receber…": os dois links na mesma linha, cada um com a seta do kit. */
+.faq__links { display: flex; flex-wrap: wrap; gap: 6px 24px; }
+/* 320–379px: lado a lado não cabe; um embaixo do outro. */
+@media (max-width: 379px) {
+  .wa-cta__actions { flex-direction: column; }
+  /* em coluna, o flex: 1 1 0 de cima encolheria a altura do botão */
+  .wa-cta__actions .wa-cta__btn { flex: none; width: 100%; }
+}
+
 /* ══ LOJA (/) ═══════════════════════════════════════════════════════════════════════════════ */
 .shop { padding: calc(var(--nav, 72px) + 28px) 0 80px; }
 .shop > .wrap { display: block; }

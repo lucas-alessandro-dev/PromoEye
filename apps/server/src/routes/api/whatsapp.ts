@@ -10,13 +10,11 @@ import {
 import { inWindow, quietOffWindow, windowDTO } from '../../lib/peak.js'
 import { prisma } from '../../lib/prisma.js'
 import { parse } from '../../lib/validate.js'
-import { messageDTO } from '../../services/dto.js'
 import { getSenderSettings, saveSenderSettings } from '../../services/settings.js'
-import { deliver, sendTest } from '../../services/whatsapp/queue.js'
+import { sendTest } from '../../services/whatsapp/queue.js'
 import { phoneOf, stateOf, waha, wahaConfigured, WahaError } from '../../services/whatsapp/waha.js'
 
 const HOUR = 3_600_000
-const include = { offer: { include: { store: { select: { name: true } } } } } as const
 
 /** Conexão do número, grupo e regras do envio automático (página WhatsApp do painel). */
 export async function whatsappRoutes(app: FastifyInstance) {
@@ -110,31 +108,16 @@ export async function whatsappRoutes(app: FastifyInstance) {
     }
     return { ok: true }
   })
-
-  /** "Enviar agora": manda na hora, sem esperar a fila nem o horário de silêncio. */
-  app.post<{ Params: { id: string } }>('/messages/:id/send', async (request, reply) => {
-    if (!needWaha(reply)) return reply
-    const exists = await prisma.outboundMessage.findUnique({ where: { id: request.params.id } })
-    if (!exists) return reply.code(404).send({ error: 'Mensagem não encontrada.' })
-    let res: { ok: boolean; error: string | null }
-    try {
-      res = await deliver(exists.id, 'manual')
-    } catch (err) {
-      return fail(reply, err)
-    }
-    const updated = await prisma.outboundMessage.findUniqueOrThrow({ where: { id: exists.id }, include })
-    if (!res.ok) return reply.code(502).send({ error: res.error, message: messageDTO(updated) })
-    return messageDTO(updated)
-  })
 }
 
 export async function statusDTO(): Promise<WhatsAppStatusDTO> {
   const since = new Date(Date.now() - HOUR)
+  const channel = 'whatsapp'
   const [settings, queued, failed, sentLastHour] = await Promise.all([
     getSenderSettings(),
-    prisma.outboundMessage.count({ where: { status: 'QUEUED' } }),
-    prisma.outboundMessage.count({ where: { status: 'FAILED' } }),
-    prisma.outboundMessage.count({ where: { status: 'SENT', sentAt: { gte: since } } }),
+    prisma.outboundMessage.count({ where: { channel, status: 'QUEUED' } }),
+    prisma.outboundMessage.count({ where: { channel, status: 'FAILED' } }),
+    prisma.outboundMessage.count({ where: { channel, status: 'SENT', sentAt: { gte: since } } }),
   ])
   const now = new Date()
   const quietNow =

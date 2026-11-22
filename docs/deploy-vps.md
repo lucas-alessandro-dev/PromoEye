@@ -94,6 +94,16 @@ O DNS fica na Hostinger (hPanel › Domínios › promoeye.com.br › DNS; names
 
 O `robots.txt` bloqueia tudo enquanto **Painel › Configurações › "Deixar o Google indexar"** estiver desligado. Ligue com o domínio definitivo no ar.
 
+## Telegram
+
+O envio pelo Telegram só liga com o token do bot. No `.env` da VPS:
+
+```bash
+TELEGRAM_BOT_TOKEN=123456789:AA...   # do @BotFather (/newbot); é segredo
+```
+
+Rode o deploy de novo, adicione o bot ao grupo (num canal, como administrador com permissão de publicar) e escolha onde ele posta em Painel › Telegram. O app já sai para a internet pela rede do proxy, então não há container nem porta nova. Sem o token, a página Telegram mostra o passo a passo e nada é gerado.
+
 ## Alertas por e-mail (SMTP)
 
 O formulário "me avise quando baixar" só aparece com SMTP configurado. No `.env` da VPS:

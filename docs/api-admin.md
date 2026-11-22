@@ -66,9 +66,9 @@ A coleta leva de 30 s a 2 min. Depois do POST, consulte `GET /api/admin/runs/:id
 
 | Método | Rota | Corpo | Resposta |
 |---|---|---|---|
-| GET | `/api/admin/messages?status=DRAFT` | — | `MessageDTO[]` (sem `status` = todas, mais novas primeiro, até 200; `QUEUED` vem na ordem de saída) |
+| GET | `/api/admin/messages?status=DRAFT&channel=telegram` | — | `MessageDTO[]` (sem `status` = todas, mais novas primeiro, até 200; `QUEUED` vem na ordem de saída; `channel` é `whatsapp` ou `telegram`, sem ele = os dois; filtro inválido = 400) |
 | PATCH | `/api/admin/messages/:id` | `MessageUpdateInput` | `MessageDTO` (`QUEUED` põe na fila e zera tentativas; `DRAFT` tira; 409 se estiver `SENDING`) |
-| POST | `/api/admin/messages/:id/send` | — | `MessageDTO`. Manda na hora pelo WAHA, sem esperar fila nem horário de silêncio. Em falha: 502 `{ error, message: MessageDTO }` |
+| POST | `/api/admin/messages/:id/send` | — | `MessageDTO`. Manda na hora pelo canal da mensagem (WAHA ou bot do Telegram), sem esperar fila nem horário de silêncio. 409 se o canal não estiver configurado. Em falha: 502 `{ error, message: MessageDTO }` |
 
 Status: `DRAFT` (rascunho) → `QUEUED` (fila do envio automático) → `SENDING` → `SENT`, ou `DISCARDED` / `FAILED` com o motivo em `error`.
 O envio manual continua: copiar o texto, ou abrir `https://wa.me/?text=<texto codificado>`, e marcar como `SENT`.
@@ -85,6 +85,10 @@ O envio manual continua: copiar o texto, ou abrir `https://wa.me/?text=<texto co
 | GET | `/api/admin/whatsapp/groups` | — | `WhatsAppGroupDTO[]` (grupos do número conectado) |
 | PUT | `/api/admin/whatsapp/settings` | `SenderSettings` | `WhatsAppStatusDTO`. `autoSend` exige `groupId`; ligar `autoSend` liga `whatsapp.autoDraft` |
 | POST | `/api/admin/whatsapp/test` | `{ target: 'me' \| 'group' }` | `{ ok: true }` |
+| GET | `/api/admin/telegram/status` | — | `TelegramStatusDTO` (estado do bot, grupo conferido agora com permissão de postar, regras, números da fila) |
+| GET | `/api/admin/telegram/chats` | — | `TelegramChatDTO[]` (grupos e canais onde o bot apareceu nas últimas 24 h). 409 sem `TELEGRAM_BOT_TOKEN` |
+| PUT | `/api/admin/telegram/settings` | `TelegramSettings` | `TelegramStatusDTO`. `autoSend` exige `chatId`. Grupo novo é conferido no Telegram: guarda o id numérico e o nome de lá; id que o bot não enxerga = 400 |
+| POST | `/api/admin/telegram/test` | — | `{ ok: true }` (mensagem de teste no grupo escolhido) |
 
 Erros do WAHA voltam como 502 com a explicação em `error`; sem `WAHA_URL`/`WAHA_API_KEY` no servidor, 409.
 

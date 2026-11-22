@@ -23,6 +23,8 @@ import { imageForWhatsApp, waha, wahaConfigured, WahaError } from './waha.js'
  */
 
 const HOUR = 3_600_000
+/** Esta fila só mexe nas mensagens do WhatsApp; o Telegram tem a dele (services/telegram/queue.ts). */
+const CHANNEL = 'whatsapp'
 const TICK_MS = 20_000
 const MIN_GAP_MS = 60_000
 const GAP_JITTER_MS = 30_000
@@ -38,7 +40,8 @@ type MessageWithOffer = OutboundMessage & { offer: (Offer & { store: Store }) | 
 /** Por que não dá para enviar agora (null = pode). */
 export function blockedNow(input: {
   now: Date
-  sender: SenderSettings
+  /** Também serve ao Telegram, com o id do grupo dele em `groupId`. */
+  sender: Pick<SenderSettings, 'groupId' | 'maxPerHour' | 'quietHours' | 'quietStart' | 'quietEnd'>
   sentLastHour: number
   lastSentAt: Date | null
   gapMs: number
@@ -119,7 +122,7 @@ export async function deliver(messageId: string, from: 'queue' | 'manual'): Prom
     }
 
     const claimed = await prisma.outboundMessage.updateMany({
-      where: { id: messageId, status: { in: from === 'queue' ? ['QUEUED'] : ['DRAFT', 'QUEUED', 'FAILED'] } },
+      where: { id: messageId, channel: CHANNEL, status: { in: from === 'queue' ? ['QUEUED'] : ['DRAFT', 'QUEUED', 'FAILED'] } },
       data: { status: 'SENDING' },
     })
     if (claimed.count === 0) return { ok: false, error: 'Essa mensagem já foi enviada ou descartada.' }
@@ -196,14 +199,14 @@ let gapMs = MIN_GAP_MS
 
 async function tick(log: FastifyBaseLogger): Promise<void> {
   if (locked) return
-  const queued = await prisma.outboundMessage.count({ where: { status: 'QUEUED' } })
+  const queued = await prisma.outboundMessage.count({ where: { channel: CHANNEL, status: 'QUEUED' } })
   if (!queued) return
 
   const now = new Date()
   const sender = await getSenderSettings()
   const [sentLastHour, last] = await Promise.all([
-    prisma.outboundMessage.count({ where: { status: 'SENT', sentAt: { gte: new Date(now.getTime() - HOUR) } } }),
-    prisma.outboundMessage.findFirst({ where: { status: 'SENT', sentAt: { not: null } }, orderBy: { sentAt: 'desc' } }),
+    prisma.outboundMessage.count({ where: { channel: CHANNEL, status: 'SENT', sentAt: { gte: new Date(now.getTime() - HOUR) } } }),
+    prisma.outboundMessage.findFirst({ where: { channel: CHANNEL, status: 'SENT', sentAt: { not: null } }, orderBy: { sentAt: 'desc' } }),
   ])
   const quietOff = inWindow(quietOffWindow, now)
   if (blockedNow({ now, sender, sentLastHour, lastSentAt: last?.sentAt ?? null, gapMs, quietOff })) return
@@ -214,7 +217,7 @@ async function tick(log: FastifyBaseLogger): Promise<void> {
   // Descarta o que perdeu a validade até achar uma mensagem que ainda vale.
   for (let i = 0; i < 20; i++) {
     const msg = (await prisma.outboundMessage.findFirst({
-      where: { status: 'QUEUED' },
+      where: { channel: CHANNEL, status: 'QUEUED' },
       orderBy: [{ queuedAt: 'asc' }, { createdAt: 'asc' }],
       include,
     })) as MessageWithOffer | null
@@ -224,6 +227,7 @@ async function tick(log: FastifyBaseLogger): Promise<void> {
       ? await prisma.outboundMessage.count({
           where: {
             id: { not: msg.id },
+            channel: CHANNEL,
             createdAt: { gt: msg.createdAt },
             status: { in: ['QUEUED', 'SENDING', 'SENT'] },
             offer: { watchItemId: msg.offer.watchItemId },
