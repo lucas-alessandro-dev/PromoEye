@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { normalizeGtin } from './gtin.js'
+import { isUrlWithoutMarker } from './affiliate.js'
 
 /**
  * Contrato da API do painel (/api/admin/*). O servidor valida a entrada com
@@ -118,7 +119,10 @@ const patchText = (max: number) =>
 export const storeUpdateInput = z.object({
   enabled: z.boolean().optional(),
   sellerPolicy: z.enum(['OFFICIAL_ONLY', 'ALL']).optional(),
-  affiliateTemplate: patchText(600),
+  affiliateTemplate: patchText(600).refine(
+    (v) => !v || !isUrlWithoutMarker(v),
+    'Link sem marcador: ponha {path} (loja de afiliado, como a da Magalu) ou {url_encoded} (rede) onde entra o produto, ou use parametro=valor.'
+  ),
   trustNote: patchText(200),
 })
 export type StoreUpdateInput = z.infer<typeof storeUpdateInput>

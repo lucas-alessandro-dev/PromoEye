@@ -17,6 +17,13 @@ describe('PATCH parcial não apaga o que não veio', () => {
     expect(r.affiliateTemplate).toBeUndefined()
     expect(r.trustNote).toBeUndefined()
   })
+  it('modelo de afiliado: parâmetro, rede e {path} passam; link inteiro sem marcador não', () => {
+    for (const ok of ['tag=x-20', 'matt_word=a&matt_tool=1', 'https://www.awin1.com/?ued={url_encoded}', 'https://www.magazinevoce.com.br/magazinepromoeye{path}']) {
+      expect(storeUpdateInput.safeParse({ affiliateTemplate: ok }).success).toBe(true)
+    }
+    expect(storeUpdateInput.parse({ affiliateTemplate: '' }).affiliateTemplate).toBeNull()
+    expect(storeUpdateInput.safeParse({ affiliateTemplate: 'https://www.magazinevoce.com.br/magazinepromoeye/' }).success).toBe(false)
+  })
 })
 
 describe('watchItemInput', () => {

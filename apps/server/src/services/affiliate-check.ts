@@ -1,3 +1,4 @@
+import { hasAffiliateMarker, isUrlWithoutMarker } from '@promoeye/shared'
 import type { AffiliateCheckDTO, AffiliateCheckRow, AffiliateMode, CheckStatus } from '@promoeye/shared'
 import { config } from '../config.js'
 import { prisma } from '../lib/prisma.js'
@@ -48,6 +49,23 @@ const sameSite = (host: string, domain: string) => {
 }
 const knownNetwork = (host: string) => NETWORK_HOSTS.some((n) => host === n || host.endsWith(`.${n}`))
 
+/** Onde o afiliado vende com a vitrine da própria loja: chegar lá é chegar na loja. */
+const AFFILIATE_STOREFRONTS: Record<string, string[]> = {
+  'magazineluiza.com.br': ['magazinevoce.com.br'],
+}
+const storeHost = (host: string, domain: string) =>
+  sameSite(host, domain) ||
+  (AFFILIATE_STOREFRONTS[domain.toLowerCase().replace(/^www\./, '')] ?? []).some((h) => host === h || host.endsWith(`.${h}`))
+
+const pathOf = (url: string): string => {
+  try {
+    const u = new URL(url)
+    return u.pathname + u.search
+  } catch {
+    return ''
+  }
+}
+
 const worst = (a: CheckStatus, b: CheckStatus): CheckStatus => {
   const rank: Record<CheckStatus, number> = { none: 0, ok: 1, warn: 2, error: 3 }
   return rank[b] > rank[a] ? b : a
@@ -83,7 +101,18 @@ export function checkStoreTemplate(store: StoreLite, sample: SampleOffer | null)
   if (!template) return { ...base, messages: ['Sem afiliado: o clique vai para a loja sem comissão.'] }
 
   const productUrl = sample?.url ?? `https://${store.domain.replace(/^https?:\/\//, '')}/`
-  const wrapper = /\{url(_encoded)?\}|\{id\}/.test(template)
+  if (isUrlWithoutMarker(template)) {
+    return {
+      ...base,
+      mode: 'param',
+      status: 'error',
+      sampleUrl: productUrl,
+      messages: [
+        'O modelo é um link inteiro sem marcador, então o clique vai para a loja sem comissão. Ponha {path} (loja de afiliado, como a da Magalu) ou {url_encoded} (rede) onde entra o produto, ou use parametro=valor.',
+      ],
+    }
+  }
+  const wrapper = hasAffiliateMarker(template)
   const mode: AffiliateMode = wrapper ? 'wrapper' : 'param'
   const out = buildOutboundUrl(productUrl, { template, externalId: sample?.externalId })
   let status: CheckStatus = 'ok'
@@ -107,7 +136,12 @@ export function checkStoreTemplate(store: StoreLite, sample: SampleOffer | null)
       status = worst(status, 'warn')
       messages.push(`O link sai por ${host}, que não é a loja nem uma rede conhecida. Confira se é a sua rede de afiliados.`)
     }
-    if (!out.includes(encodeURIComponent(productUrl)) && !out.includes(productUrl) && !(template.includes('{id}') && sample)) {
+    const carriesProduct =
+      out.includes(encodeURIComponent(productUrl)) ||
+      out.includes(productUrl) ||
+      (template.includes('{id}') && sample !== null) ||
+      (template.includes('{path}') && pathOf(productUrl) !== '' && out.includes(pathOf(productUrl)))
+    if (!carriesProduct) {
       status = worst(status, 'error')
       messages.push('O link gerado não leva o endereço do produto: a rede não vai saber para onde mandar.')
     }
@@ -201,7 +235,7 @@ async function liveCheck(row: AffiliateCheckRow, store: StoreLite, template: str
       out.messages.push(`A loja recusou a conferência automática (HTTP ${r.status}); abra o link no navegador para confirmar.`)
       return out
     }
-    if (!sameSite(host, store.domain) && row.mode !== 'offer') {
+    if (!storeHost(host, store.domain) && row.mode !== 'offer') {
       out.status = worst(out.status, 'warn')
       out.messages.push(`Depois de ${r.hops} redirecionamento(s), o link parou em ${host}, não na loja.`)
     }

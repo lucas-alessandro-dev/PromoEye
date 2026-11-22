@@ -166,6 +166,25 @@ describe('verificação dos links de afiliado', () => {
     expect(checkStoreTemplate({ ...store, affiliateTemplate: 'http://www.awin1.com/?u={url_encoded}' }, s).status).toBe('error')
   })
 
+  it('Magalu com {path}: ok, leva o caminho do produto para a loja de afiliado', () => {
+    const magalu = { id: 'magalu', name: 'Magazine Luiza', domain: 'www.magazineluiza.com.br', affiliateTemplate: 'https://www.magazinevoce.com.br/magazinepromoeye{path}' }
+    const s = { id: 'o4', url: 'https://www.magazineluiza.com.br/fritadeira-xyz/p/237184100/ep/fit/', externalId: '237184100' }
+    expect(checkStoreTemplate(magalu, s)).toMatchObject({
+      mode: 'wrapper',
+      status: 'ok',
+      sampleUrl: 'https://www.magazinevoce.com.br/magazinepromoeye/fritadeira-xyz/p/237184100/ep/fit/',
+    })
+    // Sem oferta para testar, cai na página inicial da loja: só aviso.
+    expect(checkStoreTemplate(magalu, null)).toMatchObject({ status: 'warn', sampleUrl: 'https://www.magazinevoce.com.br/magazinepromoeye/' })
+  })
+
+  it('link inteiro colado sem marcador: erro, com o jeito certo na mensagem', () => {
+    const ml = { id: 'mercadolivre', name: 'Mercado Livre', domain: 'www.mercadolivre.com.br', affiliateTemplate: 'https://www.mercadolivre.com.br/social/allu2219049' }
+    const r = checkStoreTemplate(ml, { id: 'o5', url: 'https://www.mercadolivre.com.br/p/MLB1', externalId: 'MLB1' })
+    expect(r).toMatchObject({ status: 'error', sampleUrl: 'https://www.mercadolivre.com.br/p/MLB1' })
+    expect(r.messages[0]).toContain('{path}')
+  })
+
   it('link colado na oferta manual: https e domínio conhecido', () => {
     const ml = { id: 'mercadolivre', name: 'Mercado Livre', domain: 'www.mercadolivre.com.br', affiliateTemplate: null }
     expect(checkOfferLink(ml, { id: 'o', affiliateUrl: 'https://meli.la/abc123' }).status).toBe('ok')

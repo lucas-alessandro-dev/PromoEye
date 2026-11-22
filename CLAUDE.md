@@ -48,7 +48,7 @@
 - Proteção: `preco-de-inflado` (o "de" some da vitrine), `subiu-antes` (anula a promoção), `historico-curto`.
 
 ### 3.6 Afiliados e `/ir/<id>`
-- Prioridade: link colado na oferta → modelo da loja (`tag=...` ou rede com `{url}`/`{url_encoded}`/`{id}`) → URL limpa.
+- Prioridade: link colado na oferta → modelo da loja (`tag=...`, rede com `{url}`/`{url_encoded}`/`{id}`, ou loja de afiliado com `{path}`, como `https://www.magazinevoce.com.br/magazinepromoeye{path}`) → URL limpa. A regra fica em `packages/shared/src/affiliate.ts` (servidor e prévia do painel usam a mesma). URL inteira sem marcador é recusada no painel e ignorada no `/ir/`.
 - Clique sem IP; canal `site`, `whatsapp` (`?c=wa`) ou `email` (`?c=email`). Só redireciona para https.
 - Verificação: `npm run check:affiliates [-- --live]` ou Painel › Lojas.
 
@@ -84,7 +84,7 @@
 
 ### Pendente (depende de decisão ou acesso do Lucas)
 - Contratar SMTP (Brevo/SES/Resend) e configurar SPF/DKIM no DNS de `promoeye.com.br` (zona na Hostinger).
-- Cadastrar e validar os afiliados reais (Amazon `tag`, redes para VTEX, links manuais de ML/Magalu). O modelo atual do Mercado Livre é um link de perfil `/social/...` colado como parâmetro e não gera comissão.
+- Cadastrar e validar os afiliados reais (Amazon `tag`, redes para VTEX). Mercado Livre: modelo `matt_word`/`matt_tool` cadastrado em 19/11. Magalu (Influenciador Magalu): loja `https://www.magazinevoce.com.br/magazinepromoeye/`; o link de afiliado de cada oferta manual é o caminho do produto da Magalu depois desse endereço. Nunca colar uma URL inteira no modelo da loja: sem marcador, ela vira parâmetro e o link sai quebrado.
 - Ligar "Deixar o Google indexar" (o domínio definitivo já está no ar).
 
 ### Depois da Black Friday

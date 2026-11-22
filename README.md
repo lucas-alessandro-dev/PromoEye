@@ -59,10 +59,13 @@ A Amazon é lida pela página pública de busca, uma vez por hora por item. Se e
 
 Em ordem de prioridade:
 
-1. **Link na oferta** (Ofertas → Link de afiliado): vence tudo. Use para Mercado Livre, Magalu e qualquer programa que gere um link por produto.
-2. **Modelo da loja** (Lojas → Afiliado), em uma de duas formas:
-   - parâmetro: `tag=seutag-20` é anexado à URL (Amazon Associados);
-   - modelo de rede: `https://rede.exemplo/click?u={url_encoded}`. Os marcadores são `{url}`, `{url_encoded}` e `{id}`.
+1. **Link na oferta** (Ofertas → Link de afiliado): vence tudo. Use para programas que geram um link diferente por produto.
+2. **Modelo da loja** (Lojas → Afiliado), em uma de três formas:
+   - parâmetro: `tag=seutag-20` é anexado à URL (Amazon Associados; Mercado Livre com `matt_word=...&matt_tool=...`);
+   - modelo de rede: `https://rede.exemplo/click?u={url_encoded}`. Os marcadores são `{url}`, `{url_encoded}` e `{id}`;
+   - loja de afiliado: `https://www.magazinevoce.com.br/magazinesualoja{path}` (Influenciador Magalu). O `{path}` é o caminho e a query do produto.
+
+   Um link inteiro sem marcador (por exemplo, só o endereço da sua loja) é recusado: aplicado, sairia quebrado.
 3. Sem afiliado, o link vai direto para a página do produto.
 
 O aviso de afiliado (CONAR) fica no rodapé da vitrine e é editável em Configurações.

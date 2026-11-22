@@ -1,4 +1,4 @@
-import type { RunDTO } from '@promoeye/shared'
+import { applyAffiliateTemplate, type RunDTO } from '@promoeye/shared'
 
 const dateTime = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 const timeOnly = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -70,24 +70,9 @@ export function moneyInput(raw: string): string {
   return s
 }
 
-/** Prévia do link de afiliado — mesma regra do servidor (services/affiliate.ts). */
+/** Prévia do link de afiliado — a mesma regra do /ir/ (packages/shared/src/affiliate.ts). */
 export function previewOutbound(productUrl: string, template: string | null | undefined, externalId = '123456'): string {
-  const t = template?.trim()
-  if (!t) return productUrl
-  if (/\{url(_encoded)?\}|\{id\}/.test(t)) {
-    return t
-      .replaceAll('{url_encoded}', encodeURIComponent(productUrl))
-      .replaceAll('{url}', productUrl)
-      .replaceAll('{id}', encodeURIComponent(externalId))
-  }
-  try {
-    const url = new URL(productUrl)
-    const params = new URLSearchParams(t.replace(/^[?&]/, ''))
-    for (const [k, v] of params) url.searchParams.set(k, v)
-    return url.toString()
-  } catch {
-    return productUrl
-  }
+  return applyAffiliateTemplate(productUrl, template, externalId)
 }
 
 /** Copia para a área de transferência, com reserva para navegador sem Clipboard API. */

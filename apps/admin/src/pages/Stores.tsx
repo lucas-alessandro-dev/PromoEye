@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { formatBRL, timeAgo, type AffiliateCheckDTO, type AffiliateCheckRow, type StoreDTO } from '@promoeye/shared'
+import { formatBRL, storeUpdateInput, timeAgo, type AffiliateCheckDTO, type AffiliateCheckRow, type StoreDTO } from '@promoeye/shared'
 import { api, errorMessage, type StorePatch, type StoreTestResult } from '../api'
 import { useToast } from '../context/toast'
 import { useLoad, useTitle } from '../lib/hooks'
@@ -75,6 +75,8 @@ function StoreCard({ store: s, onSaved }: { store: StoreDTO; onSaved: (s: StoreD
 
   const sampleUrl = `https://${s.domain}/produto-exemplo/p`
   const previewLink = previewOutbound(sampleUrl, template)
+  const checked = storeUpdateInput.safeParse({ affiliateTemplate: template })
+  const templateError = checked.success ? undefined : checked.error.issues[0]?.message
 
   const patch = async (input: StorePatch, done: string) => {
     setBusy(true)
@@ -159,12 +161,20 @@ function StoreCard({ store: s, onSaved }: { store: StoreDTO; onSaved: (s: StoreD
           label="Modelo de afiliado da loja"
           value={template}
           onChange={(e) => setTemplate(e.target.value)}
-          placeholder={s.id === 'amazon' ? 'tag=seutag-20' : 'tag=seutag ou https://rede…{url_encoded}'}
+          placeholder={
+            s.id === 'amazon'
+              ? 'tag=seutag-20'
+              : s.id === 'magalu'
+                ? 'https://www.magazinevoce.com.br/magazinesualoja{path}'
+                : 'tag=seutag ou https://rede…{url_encoded}'
+          }
+          error={templateError}
           hint={
             <>
-              Duas formas: um parâmetro como <code>tag=seutag-20</code> (anexado ao link do produto, é o caso da Amazon), ou um
-              link da rede de afiliados com <code>{'{url_encoded}'}</code> no lugar do produto (Awin, Rakuten, Lomadee). Link
-              colado em uma oferta vence este modelo.
+              Três formas: um parâmetro como <code>tag=seutag-20</code> (anexado ao link do produto, é o caso da Amazon e do
+              Mercado Livre); um link da rede de afiliados com <code>{'{url_encoded}'}</code> no lugar do produto (Awin, Rakuten,
+              Lomadee); ou o endereço da sua loja de afiliado com <code>{'{path}'}</code> no lugar do caminho do produto
+              (Influenciador Magalu). Link colado em uma oferta vence este modelo.
             </>
           }
         />
@@ -173,7 +183,7 @@ function StoreCard({ store: s, onSaved }: { store: StoreDTO; onSaved: (s: StoreD
           <code>{previewLink}</code>
         </p>
         <div className="row-actions">
-          <button type="submit" className="btn btn-sm btn-primary" disabled={busy || !dirty}>
+          <button type="submit" className="btn btn-sm btn-primary" disabled={busy || !dirty || Boolean(templateError)}>
             Salvar modelo
           </button>
           {!isManual && (

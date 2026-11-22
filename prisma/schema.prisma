@@ -60,9 +60,10 @@ model Store {
   config            Json         @default("{}")
   enabled           Boolean      @default(true)
   sellerPolicy      SellerPolicy @default(OFFICIAL_ONLY)
-  /// Afiliado da loja inteira. Duas formas:
+  /// Afiliado da loja inteira. Três formas (regra em packages/shared/src/affiliate.ts):
   ///  - parâmetro: "tag=seutag-20" é anexado à URL do produto;
-  ///  - modelo:    "https://rede.exemplo/?url={url_encoded}" embrulha a URL.
+  ///  - modelo:    "https://rede.exemplo/?url={url_encoded}" embrulha a URL;
+  ///  - loja:      "https://www.magazinevoce.com.br/magazinesualoja{path}" leva o caminho do produto.
   affiliateTemplate String?
   /// Por que a loja é confiável (aparece na vitrine).
   trustNote         String?
