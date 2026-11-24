@@ -33,6 +33,21 @@ export function listDiscount(price: number, listPrice: number | null | undefined
 }
 
 /**
+ * Desconto do "de" que pode aparecer riscado para o público (vitrine e grupo).
+ * Quando o preço é à vista e o cartão custa mais, o "de" só conta se for maior
+ * que o preço no cartão. Igual ao cartão, a "remarcação" é só o desconto do
+ * Pix: riscar um preço que ainda vale no cartão engana. null = não mostrar.
+ */
+export function shownListDiscount(
+  price: number,
+  listPrice: number | null | undefined,
+  cardPrice: number | null | undefined
+): number | null {
+  if (cardPrice && cardPrice > price + 0.005 && (!listPrice || listPrice <= cardPrice + 0.005)) return null
+  return listDiscount(price, listPrice)
+}
+
+/**
  * Black Friday = a sexta-feira seguinte à quarta quinta-feira de novembro
  * (o mesmo critério americano que o varejo brasileiro adotou).
  */

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import { daysUntilBlackFriday, displayGtin, flagTone, listDiscount } from '@promoeye/shared'
+import { daysUntilBlackFriday, displayGtin, flagTone, shownListDiscount } from '@promoeye/shared'
 import type { Offer, PricePoint, Store, WatchItem } from '@prisma/client'
 import { publicUrl } from '../config.js'
 import { num, numReq, prisma } from '../lib/prisma.js'
@@ -67,11 +67,11 @@ export function cardVM(o: OfferFull): CardVM {
   const price = numReq(o.price)
   const listPrice = num(o.listPrice)
   const inflated = o.flags.includes('preco-de-inflado')
-  const off = listDiscount(price, listPrice)
-  const flags = FLAG_ORDER.filter((f) => o.flags.includes(f)).map((id) => ({ id, tone: flagTone(id) }))
-  const showList = Boolean(listPrice && off && off >= 0.03 && !inflated)
   const pix = num(o.pixPrice)
   const card = num(o.cardPrice)
+  const off = shownListDiscount(price, listPrice, card)
+  const flags = FLAG_ORDER.filter((f) => o.flags.includes(f)).map((id) => ({ id, tone: flagTone(id) }))
+  const showList = Boolean(listPrice && off && off >= 0.03 && !inflated)
   return {
     id: o.id,
     href: `/ir/${o.id}`,

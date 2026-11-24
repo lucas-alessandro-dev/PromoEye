@@ -511,6 +511,8 @@ export async function draftForBestDeal(
     storeName: offer.store.name,
     price,
     listPrice: num(offer.listPrice),
+    cardPrice: num(offer.cardPrice),
+    pixPrice: num(offer.pixPrice),
     installments: offer.installments,
     flags: offer.flags,
     link: `${publicUrl}/ir/${offer.id}?c=${CLICK_PARAM[channel]}`,

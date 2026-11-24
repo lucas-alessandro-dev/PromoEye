@@ -1,4 +1,4 @@
-import { hourInSaoPaulo, inQuietHours, type SenderSettings } from '@promoeye/shared'
+import { hourInSaoPaulo, inQuietHours, priceCondition, type SenderSettings } from '@promoeye/shared'
 import type { Offer, OutboundMessage, Store } from '@prisma/client'
 import type { FastifyBaseLogger } from 'fastify'
 import { FRESH_MS } from '../../collector/run.js'
@@ -63,7 +63,9 @@ export function staleReason(input: {
   now: Date
   queuedAt: Date
   messagePrice: number | null
-  offer: Pick<Offer, 'price' | 'available' | 'hidden' | 'source' | 'lastSeenAt'> | null
+  /** O texto que vai sair (pode ter sido editado no painel). */
+  messageBody: string
+  offer: Pick<Offer, 'price' | 'cardPrice' | 'pixPrice' | 'available' | 'hidden' | 'source' | 'lastSeenAt'> | null
   hasNewer: boolean
 }): string | null {
   const { offer, now } = input
@@ -76,6 +78,12 @@ export function staleReason(input: {
   const price = numReq(offer.price)
   if (input.messagePrice !== null && price > input.messagePrice * 1.005) {
     return `O preço subiu para R$ ${price.toFixed(2).replace('.', ',')} antes do envio.`
+  }
+  // A mensagem diz "no Pix": a última coleta tem de confirmar que o preço
+  // ainda é o do Pix. Anunciar um Pix que a loja tirou é propaganda enganosa.
+  if (/\bno pix\b/i.test(input.messageBody ?? '')) {
+    const cond = priceCondition({ price, cardPrice: num(offer.cardPrice), pixPrice: num(offer.pixPrice) })
+    if (cond !== 'pix') return 'A loja não mostra mais esse preço no Pix.'
   }
   if (input.hasNewer) return 'Substituída por uma mensagem mais nova do mesmo item.'
   if (now.getTime() - input.queuedAt.getTime() > MAX_QUEUE_AGE_MS) {
@@ -238,6 +246,7 @@ async function tick(log: FastifyBaseLogger): Promise<void> {
       now,
       queuedAt: msg.queuedAt ?? msg.createdAt,
       messagePrice: num(msg.price),
+      messageBody: msg.body,
       offer: msg.offer,
       hasNewer: newer > 0,
     })

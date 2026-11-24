@@ -237,7 +237,14 @@ describe('a mensagem ainda vale?', () => {
     source: 'AUTO' as const,
     lastSeenAt: new Date(afternoon.getTime() - 20 * 60_000),
   }
-  const base = { now: afternoon, queuedAt: new Date(afternoon.getTime() - HOUR), messagePrice: 3999, offer, hasNewer: false }
+  const base = {
+    now: afternoon,
+    queuedAt: new Date(afternoon.getTime() - HOUR),
+    messagePrice: 3999,
+    messageBody: '🔥 *iPhone 16* por *R$ 3.999*',
+    offer: { ...offer, cardPrice: null, pixPrice: null },
+    hasNewer: false,
+  }
 
   it('mesmo preço, anúncio visto há pouco: vale', () => {
     expect(staleReason(base)).toBeNull()
@@ -259,7 +266,34 @@ describe('a mensagem ainda vale?', () => {
     expect(staleReason({ ...base, queuedAt: new Date(afternoon.getTime() - MAX_QUEUE_AGE_MS - 1) })).toMatch(/12 h/)
   })
   it('oferta manual não "some da loja" (ninguém a revisita)', () => {
-    expect(staleReason({ ...base, offer: { ...offer, source: 'MANUAL', lastSeenAt: new Date(0) } })).toBeNull()
+    expect(staleReason({ ...base, offer: { ...base.offer, source: 'MANUAL', lastSeenAt: new Date(0) } })).toBeNull()
+  })
+
+  describe('mensagem que diz "no Pix" (Polishop)', () => {
+    const pixMsg = {
+      ...base,
+      messagePrice: 499.95,
+      messageBody: '🔥 *Airfryer Smart Vision* por *R$ 499,95 no Pix*\nou R$ 555,50 no cartão',
+    }
+    const polishop = {
+      ...offer,
+      price: new Prisma.Decimal('499.95'),
+      cardPrice: new Prisma.Decimal('555.50'),
+      pixPrice: new Prisma.Decimal('499.95'),
+    }
+    it('a última coleta ainda confirma o Pix: vale', () => {
+      expect(staleReason({ ...pixMsg, offer: polishop })).toBeNull()
+    })
+    it('a loja tirou o Pix e o preço à vista ficou igual: descarta', () => {
+      expect(staleReason({ ...pixMsg, offer: { ...polishop, pixPrice: null } })).toBe('A loja não mostra mais esse preço no Pix.')
+    })
+    it('a loja tirou o Pix e o preço subiu: descarta pelo preço', () => {
+      const card = new Prisma.Decimal('555.50')
+      expect(staleReason({ ...pixMsg, offer: { ...polishop, price: card, cardPrice: null, pixPrice: null } })).toMatch(/subiu/)
+    })
+    it('mensagem sem "no Pix" não depende do Pix', () => {
+      expect(staleReason({ ...pixMsg, messageBody: '🔥 *Airfryer* por *R$ 499,95 à vista*', offer: { ...polishop, pixPrice: null } })).toBeNull()
+    })
   })
 })
 

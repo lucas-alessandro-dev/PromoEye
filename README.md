@@ -102,6 +102,8 @@ O preço principal de cada oferta (`price`) é a base do histórico e das compar
   - Pix mais de 30% abaixo é ignorado (erro de cadastro).
 - **KaBuM!**: o preço principal já é o do Pix (`price_with_discount`), e o cartão vai em `cardPrice`.
 - A vitrine mostra "R$ X no Pix" e "R$ Y no cartão".
+- **Grupo (WhatsApp e Telegram)**: quando o cartão custa mais, a mensagem diz em que condição vale o preço: "por *R$ 499,95 no Pix*" (ou "à vista", se a loja não diz o meio) e, embaixo, "ou R$ 555,50 no cartão · 10x de R$ 55,55 sem juros". Só fala em Pix quando o Pix é o próprio preço da mensagem, porque é esse preço que a fila confere antes de enviar. Se a última coleta não confirmar mais o Pix, a mensagem é descartada.
+- Preço "de" que não passa do preço no cartão não sai riscado, nem na vitrine nem no grupo: o "desconto" seria só o do Pix.
 
 Por que o Pix não virou o preço principal: o histórico foi gravado sem o desconto do Pix. Trocar a base faria os anúncios "caírem 5%" de uma coleta para outra, e o grupo receberia promoções falsas.
 

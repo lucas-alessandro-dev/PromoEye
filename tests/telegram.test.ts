@@ -44,6 +44,8 @@ describe('texto do Telegram', () => {
       storeName: 'Loja A',
       price: 299.9,
       listPrice: 499.9,
+      cardPrice: null,
+      pixPrice: null,
       installments: '10x de R$ 29,99',
       flags: ['menor-preco'],
       link: 'https://promoeye.example/ir/abc123?c=tg',

@@ -199,6 +199,7 @@ async function tick(log: FastifyBaseLogger): Promise<void> {
       now,
       queuedAt: msg.queuedAt ?? msg.createdAt,
       messagePrice: num(msg.price),
+      messageBody: msg.body,
       offer: msg.offer,
       hasNewer: newer > 0,
     })

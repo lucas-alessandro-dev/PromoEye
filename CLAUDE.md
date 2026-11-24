@@ -44,6 +44,7 @@
 - `Offer.price` é a base do histórico, da pontuação e das comparações. **Não troque a base** (por exemplo, para o Pix): cria uma "queda" falsa no histórico e dispara promoção falsa no grupo.
 - `pixPrice` fica à parte. VTEX, nesta ordem: (1) a linha "Pix" 1x da tabela de parcelas da loja (`Installments`): igual ao `price` e menor que o `Price` → `pixPrice = price` ("Preço no Pix": Polishop, Mondial, iByte); menor que o `price` (catálogo, sem `spotPrice`) → vai à parte; (2) a regra "PercentualDiscount para PaymentMethodId Pix em 1x", sem outra condição, e nunca em cima de um `spotPrice` já descontado. Pix mais de 30% abaixo é ignorado. KaBuM!: o `price` já é o Pix.
 - Esgotado guarda o mesmo preço à vista (`min(Price, spotPrice)`) de quando há estoque, para a volta não parecer queda.
+- **Nunca anunciar condição que a loja não confirma.** Com cartão mais caro, a mensagem do grupo diz a condição (`priceCondition`): "por R$ X no Pix" só quando o Pix É o `price`, senão "à vista", e a linha "ou R$ Y no cartão · parcelas". Um Pix menor, à parte, não vai para o grupo. Antes de enviar, a fila descarta mensagem com "no Pix" se a última coleta não confirma mais o Pix (`staleReason`). Um "de" que não passa do preço no cartão não sai riscado nem na vitrine nem no grupo (`shownListDiscount`), porque o "desconto" seria só o do Pix.
 
 ### 3.5 Pontuação e selos (`collector/scoring.ts`)
 - Positivos: `desconto-real`, `menor-preco`, `abaixo-do-alvo`, `mais-barato`, `caiu-agora`, `oferta-relampago`.
@@ -91,7 +92,7 @@
 - Domínio definitivo `promoeye.com.br` no ar (19/11/2026), com certificado, 301 do sslip e do `www`, e a fila do WhatsApp já com o link novo.
 - Envio para grupo/canal do Telegram por bot (22/11/2026): fila própria, página no painel, aviso no Painel, clique `?c=tg`. Sem migração (`channel` já existia).
 - Convite do Telegram na vitrine (Configurações › Telegram): faixa da loja, rodapé, perguntas e alerta. O WhatsApp continua sendo o botão da barra; o Telegram só ocupa a barra sem convite do WhatsApp. Sem convite do Telegram, a vitrine fica como antes.
-- Polishop revisada (24/11/2026). Já era loja VTEX automática desde o início, com logo, EAN e marca. Agora também: Pix pela tabela de parcelas ("Preço no Pix", vale para todas as VTEX), outlet descartado, preço à vista no esgotado e teste do painel com "airfryer". A loja vende quase só marca própria (Ichef, Polishop): só aparece na vitrine se um item vigiado casar com os títulos dela ("Airfryer", tudo junto).
+- Polishop revisada (24/11/2026). Já era loja VTEX automática desde o início, com logo, EAN e marca. Agora também: Pix pela tabela de parcelas ("Preço no Pix", vale para todas as VTEX), outlet descartado, preço à vista no esgotado e teste do painel com "airfryer". A mensagem do grupo passou a dizer "no Pix"/"à vista" e "ou R$ Y no cartão", e o "de" igual ao cartão deixou de sair riscado. A loja vende quase só marca própria (Ichef, Polishop): só aparece na vitrine se um item vigiado casar com os títulos dela ("Airfryer", tudo junto).
 
 ### Pendente (depende de decisão ou acesso do Lucas)
 - Contratar SMTP (Brevo/SES/Resend) e configurar SPF/DKIM no DNS de `promoeye.com.br` (zona na Hostinger).
