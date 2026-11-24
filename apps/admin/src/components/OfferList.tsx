@@ -67,8 +67,8 @@ function OfferRow({
   const makeMessage = async () => {
     setBusy(true)
     try {
-      await api.offerMessage(o.id)
-      toast('Rascunho criado na aba WhatsApp.')
+      const made = await api.offerMessage(o.id)
+      toast(made.telegram ? 'Rascunhos criados nas abas WhatsApp e Telegram.' : 'Rascunho criado na aba WhatsApp.')
     } catch (err) {
       toast(errorMessage(err), 'danger')
     } finally {

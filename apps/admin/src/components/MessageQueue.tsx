@@ -41,7 +41,7 @@ const EMPTY: Record<Tab, [string, string]> = {
 
 const EMPTY_TELEGRAM_DRAFT: [string, string] = [
   'Nenhuma mensagem para enviar',
-  'Depois que você escolhe o grupo, cada promoção nova gera uma mensagem aqui. Com o envio automático ligado, ela vai direto para a fila.',
+  'Depois que você escolhe o grupo, cada promoção nova gera uma mensagem aqui, como no WhatsApp. Com o envio automático ligado, ela vai direto para a fila. Também dá para gerar uma em Ofertas › Gerar mensagem.',
 ]
 
 const STATUS_BADGE: Record<MessageDTO['status'], { label: string; tone: 'good' | 'warn' | 'danger' | 'info' | 'neutral' }> = {

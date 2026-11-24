@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { MESSAGE_CHANNELS, MESSAGE_STATUSES, messageUpdateInput, settingsInput } from '@promoeye/shared'
+import { ADMIN_DISCARD_NOTE, MESSAGE_CHANNELS, MESSAGE_STATUSES, messageUpdateInput, settingsInput } from '@promoeye/shared'
 import { prisma } from '../../lib/prisma.js'
 import { parse } from '../../lib/validate.js'
 import { messageDTO } from '../../services/dto.js'
@@ -51,7 +51,10 @@ export async function messageRoutes(app: FastifyInstance) {
               sentAt: status === 'SENT' ? new Date() : null,
               // Entrar na fila de novo é recomeçar: prazo, tentativas e erro zerados.
               ...(status === 'QUEUED' ? { queuedAt: new Date(), attempts: 0, error: null } : {}),
-              ...(status === 'DRAFT' ? { queuedAt: null } : {}),
+              ...(status === 'DRAFT' ? { queuedAt: null, error: null } : {}),
+              // Quem descartou no painel decidiu: a regra de repetição respeita
+              // (channels.ts). O descarte da fila grava o motivo dela.
+              ...(status === 'DISCARDED' ? { error: ADMIN_DISCARD_NOTE } : {}),
             }
           : {}),
       },

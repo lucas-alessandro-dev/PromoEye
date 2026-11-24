@@ -9,6 +9,7 @@ import type {
   MessageDTO,
   MessageUpdateInput,
   OfferDTO,
+  OfferMessagesDTO,
   PreviewInput,
   PreviewResult,
   PreviewRow,
@@ -208,7 +209,7 @@ export const api = {
   deleteOffer: (id: string) => request<void>('DELETE', `/offers/${encodeURIComponent(id)}`),
   offerHistory: (id: string) => request<PricePointDTO[]>('GET', `/offers/${encodeURIComponent(id)}/history`),
   manualOffer: (input: ManualOfferInput) => request<OfferDTO>('POST', '/offers/manual', input),
-  offerMessage: (id: string) => request<MessageDTO>('POST', `/offers/${encodeURIComponent(id)}/message`),
+  offerMessage: (id: string) => request<OfferMessagesDTO>('POST', `/offers/${encodeURIComponent(id)}/message`),
   /** Liga a oferta ao produto do EAN (cria o produto se for o primeiro); null desliga. */
   linkOfferProduct: (id: string, gtin: string | null) =>
     request<OfferDTO>('POST', `/offers/${encodeURIComponent(id)}/product`, { gtin }),

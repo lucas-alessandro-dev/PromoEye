@@ -446,6 +446,12 @@ export interface MessageDTO {
   sentAt: string | null
 }
 
+/** "Gerar mensagem" (Ofertas): o rascunho de cada canal. `telegram` fica null sem bot ou sem grupo escolhido. */
+export interface OfferMessagesDTO {
+  whatsapp: MessageDTO | null
+  telegram: MessageDTO | null
+}
+
 /** QUEUED põe na fila do envio automático; DRAFT tira de lá. */
 export const messageUpdateInput = z.object({
   status: z.enum(['DRAFT', 'QUEUED', 'SENT', 'DISCARDED']).optional(),

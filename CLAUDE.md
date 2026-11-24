@@ -56,12 +56,13 @@
 - Verificação: `npm run check:affiliates [-- --live]` ou Painel › Lojas.
 
 ### 3.7 WhatsApp (WAHA, motor GOWS)
-- Mensagem só quando a promoção é mais barata que a última avisada do item. **No máximo uma ativa por item**: a nova substitui as que esperavam (`supersedeOlderMessages`).
+- Mensagem só quando a promoção é mais barata (≥1%, 7 dias) que a última avisada do item (`shouldAnnounce` em `packages/shared/src/channels.ts`). Avisada = enviada, saindo, na fila ou com erro; rascunho só conta com o envio automático desligado; descarte só conta se foi no painel (`ADMIN_DISCARD_NOTE`). O que a fila descartou (12 h esperando, esgotou, preço subiu) não segura o item. **No máximo uma ativa por item**: a nova substitui as que esperavam (`supersedeOlderMessages`).
 - Uma por vez, ≥1 min com jitter, teto por hora (padrão 10), silêncio 22h–8h (suspenso em `QUIET_OFF_*`). Antes de enviar, confere preço, estoque e se há mensagem mais nova.
 - **Sem mensagens 1:1 automáticas** do número do grupo (risco de bloqueio). Alerta individual é por e-mail.
 
 ### 3.8 Telegram (Bot API, `services/telegram/*`)
 - Bot oficial (`TELEGRAM_BOT_TOKEN`, criado no @BotFather) posta num grupo ou canal escolhido em Painel › Telegram. Sem token, nada é gerado.
+- **Todo item vai para os dois canais**: a coleta e o "Gerar mensagem" (Ofertas) geram a mensagem do WhatsApp e, com bot e grupo escolhido, a do Telegram.
 - `OutboundMessage.channel` separa os canais. **Cada canal tem a sua mensagem, fila, limite e regra de repetição**: toda consulta da fila filtra por `channel`. Sem o filtro, a mensagem de um canal "substitui" (descarta) a do outro.
 - Mesmas regras do 3.7 (`blockedNow`, `staleReason`), teto de 1 a 60 por hora. Erro de configuração (bot fora do grupo, sem permissão, token recusado) deixa a mensagem esperando na fila; 429 espera o `retry_after`; supergrupo novo troca o `chatId` sozinho.
 - O texto fica no formato do WhatsApp e vira HTML na hora de enviar (`whatsappToTelegramHtml`, escapa `< > &`). O token vai na URL: nenhum erro mostra a URL, e o token é trocado por `<token>`.

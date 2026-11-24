@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { manualOfferInput, offerProductInput, offerUpdateInput } from '@promoeye/shared'
+import { manualOfferInput, offerProductInput, offerUpdateInput, type MessageChannel, type OfferMessagesDTO } from '@promoeye/shared'
 import { num, numReq, prisma, type Prisma } from '../../lib/prisma.js'
 import { parse } from '../../lib/validate.js'
 import { draftForBestDeal, FRESH_MS } from '../../collector/run.js'
 import { linkOffersToProducts } from '../../collector/catalog.js'
 import { messageDTO, offerDTO, offerInclude as include } from '../../services/dto.js'
+import { telegramDraftEnabled } from '../../services/settings.js'
 
 const listQuery = z.object({
   itemId: z.string().optional(),
@@ -167,12 +168,19 @@ export async function offerRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>('/offers/:id/message', async (request, reply) => {
     const offer = await prisma.offer.findUnique({ where: { id: request.params.id }, include: { watchItem: true } })
     if (!offer) return reply.code(404).send({ error: 'Oferta não encontrada.' })
-    await draftForBestDeal(offer.watchItem, offer.id, { force: true })
-    const msg = await prisma.outboundMessage.findFirst({
-      where: { offerId: offer.id, channel: 'whatsapp' },
-      orderBy: { createdAt: 'desc' },
-      include: { offer: { include: { store: { select: { name: true } } } } },
-    })
-    return reply.code(201).send(msg ? messageDTO(msg) : null)
+    // Todo item vai para os dois canais: o Telegram ganha o rascunho dele
+    // sempre que tem bot e grupo escolhido (a mesma condição da coleta).
+    const channels: MessageChannel[] = (await telegramDraftEnabled()) ? ['whatsapp', 'telegram'] : ['whatsapp']
+    const out: OfferMessagesDTO = { whatsapp: null, telegram: null }
+    for (const channel of channels) {
+      await draftForBestDeal(offer.watchItem, offer.id, { force: true, channel })
+      const msg = await prisma.outboundMessage.findFirst({
+        where: { offerId: offer.id, channel },
+        orderBy: { createdAt: 'desc' },
+        include: { offer: { include: { store: { select: { name: true } } } } },
+      })
+      out[channel] = msg ? messageDTO(msg) : null
+    }
+    return reply.code(201).send(out)
   })
 }

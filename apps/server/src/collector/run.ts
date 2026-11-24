@@ -1,4 +1,4 @@
-import { formatWhatsAppMessage, type MessageChannel } from '@promoeye/shared'
+import { formatWhatsAppMessage, REPEAT_WINDOW_MS, shouldAnnounce, type MessageChannel } from '@promoeye/shared'
 import type { Offer, Store, WatchItem } from '@prisma/client'
 import { config, publicUrl } from '../config.js'
 import { BlockedError, sleep } from '../lib/http.js'
@@ -23,7 +23,6 @@ import { processAlerts } from '../services/alerts/notify.js'
  * mais requisições que isso.
  */
 
-const HOUR = 3_600_000
 export { FRESH_MS }
 
 type StoreResult = { ok: true; rows: RawOffer[] } | { ok: false; error: string }
@@ -464,8 +463,9 @@ async function processItem(
 
   // 6. Rascunho para o grupo: só a oferta mais barata do item, e só se for
   //    promoção e mais barata que a última que já mandamos. Assim o grupo não
-  //    recebe cinco mensagens do mesmo iPhone em cores diferentes. Cada canal
-  //    (WhatsApp, Telegram) tem a sua mensagem e a sua regra de repetição.
+  //    recebe cinco mensagens do mesmo iPhone em cores diferentes. Todo item
+  //    vai para os dois canais (WhatsApp, Telegram); cada um tem a sua
+  //    mensagem e aplica a regra de repetição sobre as mensagens dele.
   if (best?.isDeal) {
     if (settings.whatsapp.autoDraft) await draftForBestDeal(item, best.offer.id)
     if (await telegramDraftEnabled()) await draftForBestDeal(item, best.offer.id, { channel: 'telegram' })
@@ -491,15 +491,20 @@ export async function draftForBestDeal(
   const offer = await prisma.offer.findUnique({ where: { id: offerId }, include: { store: true } })
   if (!offer) return false
   const price = numReq(offer.price)
+  const autoQueue = channel === 'telegram' ? await telegramAutoQueueEnabled() : await autoQueueEnabled()
 
+  // Regra de repetição (packages/shared/src/channels.ts): só conta o que o
+  // canal já avisou ou ainda vai avisar, nunca o que a fila descartou.
   if (!force) {
-    const last = await prisma.outboundMessage.findFirst({
-      where: { channel, offer: { watchItemId: item.id } },
+    const now = new Date()
+    const history = await prisma.outboundMessage.findMany({
+      where: { channel, offer: { watchItemId: item.id }, createdAt: { gte: new Date(now.getTime() - REPEAT_WINDOW_MS) } },
       orderBy: { createdAt: 'desc' },
+      take: 200,
+      select: { status: true, price: true, createdAt: true, error: true },
     })
-    const lastPrice = num(last?.price)
-    const recent = last && Date.now() - last.createdAt.getTime() < 7 * 24 * HOUR
-    if (recent && lastPrice !== null && price >= lastPrice * 0.99) return false
+    const past = history.map((m) => ({ ...m, price: num(m.price) }))
+    if (!shouldAnnounce({ price, now, autoQueue, history: past })) return false
   }
 
   const reason =
@@ -518,13 +523,14 @@ export async function draftForBestDeal(
     link: `${publicUrl}/ir/${offer.id}?c=${CLICK_PARAM[channel]}`,
     realDiscountPct: offer.realDiscountPct,
   })
-  const queue = !force && (channel === 'telegram' ? await telegramAutoQueueEnabled() : await autoQueueEnabled())
+  const queue = !force && autoQueue
   const created = await prisma.outboundMessage.create({
     data: { channel, offerId: offer.id, price, reason, body, status: queue ? 'QUEUED' : 'DRAFT', queuedAt: queue ? new Date() : null },
   })
-  // No máximo UMA mensagem ativa por item em cada canal: a nova (mais barata)
-  // substitui as que ainda esperavam. O botão "Gerar mensagem" (force) não
-  // mexe nas outras: quem pediu quer comparar antes de decidir.
+  // No máximo UMA mensagem ativa por item em cada canal: a nova substitui as
+  // que ainda esperavam (inclusive o rascunho gerado antes de o envio
+  // automático ser ligado). O botão "Gerar mensagem" (force) não mexe nas
+  // outras: quem pediu quer comparar antes de decidir.
   if (!force) await supersedeOlderMessages(item.id, created.id, created.createdAt, channel)
   return true
 }
@@ -544,7 +550,7 @@ export async function supersedeOlderMessages(
       createdAt: { lte: before },
       offer: { watchItemId },
     },
-    data: { status: 'DISCARDED', error: 'Substituída por uma mensagem mais nova (e mais barata) do mesmo item.' },
+    data: { status: 'DISCARDED', error: 'Substituída por uma mensagem mais nova do mesmo item.' },
   })
   return res.count
 }
