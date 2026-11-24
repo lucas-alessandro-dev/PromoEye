@@ -30,6 +30,11 @@ export function requiredTerms(rules: Pick<MatchRules, 'query' | 'mustInclude'>):
   return rules.mustInclude.length ? rules.mustInclude : queryTerms(rules.query)
 }
 
+/** Palavras que a própria busca pede: nelas, exclusão automática não vale. */
+function wantedTerms(rules: Pick<MatchRules, 'query' | 'mustInclude'>): Set<string> {
+  return new Set([...queryTerms(rules.query), ...rules.mustInclude.flatMap((t) => t.split('|').map(normalize))])
+}
+
 export function matchTitle(title: string, rules: MatchRules): Verdict {
   const norm = normalize(title)
 
@@ -42,7 +47,7 @@ export function matchTitle(title: string, rules: MatchRules): Verdict {
   }
 
   // Exclusões globais ("capa", "usado"…) não valem se a própria busca as usa.
-  const wanted = new Set([...queryTerms(rules.query), ...rules.mustInclude.flatMap((t) => t.split('|').map(normalize))])
+  const wanted = wantedTerms(rules)
   for (const term of rules.globalExcludes) {
     const n = normalize(term)
     if (!n || wanted.has(n)) continue
@@ -54,6 +59,11 @@ export function matchTitle(title: string, rules: MatchRules): Verdict {
 export function matchOffer(raw: RawOffer, rules: MatchRules): Verdict {
   const t = matchTitle(raw.title, rules)
   if (!t.ok) return t
+  // A loja diz que a unidade não é nova (outlet da Polishop: devolvida, com
+  // marca de uso). Vale mesmo com as exclusões globais já salvas no painel.
+  if (raw.notNew && !wantedTerms(rules).has(normalize(raw.notNew))) {
+    return { ok: false, reason: `não é novo (a loja marca como "${raw.notNew}")` }
+  }
   if (rules.minPrice !== null && raw.price < rules.minPrice) {
     return { ok: false, reason: `abaixo do preço mínimo (${raw.price.toFixed(2)})` }
   }

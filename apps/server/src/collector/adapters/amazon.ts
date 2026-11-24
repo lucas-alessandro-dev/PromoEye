@@ -55,6 +55,7 @@ export function parseAmazonSearch(html: string): RawOffer[] {
       gtin: null,
       brand: null,
       modelRef: null,
+      notNew: null,
     })
   })
 

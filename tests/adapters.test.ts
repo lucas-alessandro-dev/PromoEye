@@ -58,6 +58,29 @@ describe('VTEX', () => {
     expect(o!.available).toBe(false)
     expect(o!.soldByStore).toBe(true)
   })
+
+  it('esgotado guarda o mesmo preço à vista de quando há estoque (a volta não parece queda)', () => {
+    const [o] = mapVtexProducts(
+      [product([{ sellerId: '1', sellerName: 'Polishop', commertialOffer: { Price: 555.5, spotPrice: 499.95, AvailableQuantity: 0 } }])],
+      'https://www.polishop.com.br'
+    )
+    expect(o).toMatchObject({ available: false, price: 499.95, cardPrice: 555.5, pixPrice: null })
+  })
+
+  it('outlet da Polishop (devolvido por cliente) vem marcado como não novo', () => {
+    const seller = [{ sellerId: '1', sellerName: 'Polishop', commertialOffer: { Price: 444.4, spotPrice: 399.96, AvailableQuantity: 3 } }]
+    const base = { productId: '1', link: '/x/p', items: [{ itemId: '1', sellers: seller }] }
+    const rows = mapVtexProducts(
+      [
+        // Recortes reais de 24/11/2026: "- Outlet" no título e o agrupamento "Outlet" nas duas APIs.
+        { ...base, productName: 'Fritadeira Elétrica Airfryer Ichef Smart Vision 6L - Outlet ', productClusters: [{ id: '2674', name: 'Outlet' }] },
+        { ...base, productName: 'Zip Bag Foodsaver', productClusters: { '2674': 'Outlet', '2707': 'xml-all-products' } },
+        { ...base, productName: 'Fritadeira Elétrica Airfryer Ichef Smart Vision 6L', productClusters: { '3348': 'Ação Outlet 25 e 26/07' } },
+      ],
+      'https://www.polishop.com.br'
+    )
+    expect(rows.map((r) => r.notNew)).toEqual(['outlet', 'outlet', null])
+  })
 })
 
 describe('KaBuM!', () => {

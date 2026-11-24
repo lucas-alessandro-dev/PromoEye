@@ -145,6 +145,51 @@ describe('VTEX: EAN, marca e Pix', () => {
     expect(pixPriceFrom(offer, 200)).toBe(190)
   })
 
+  describe('Pix pela tabela de parcelas da loja (Polishop, 24/11/2026: 10% no Pix, sem teaser)', () => {
+    const inst = (pix: number, card: number) => [
+      { Value: card, InterestRate: 0, TotalValuePlusInterestRate: card, NumberOfInstallments: 1, PaymentSystemName: 'Visa', PaymentSystemGroupName: 'creditCardPaymentGroup' },
+      { Value: card / 10, InterestRate: 0, TotalValuePlusInterestRate: card, NumberOfInstallments: 10, PaymentSystemName: 'Visa', PaymentSystemGroupName: 'creditCardPaymentGroup' },
+      { Value: pix, InterestRate: 0, TotalValuePlusInterestRate: pix, NumberOfInstallments: 1, PaymentSystemName: 'Pix', PaymentSystemGroupName: 'instantPaymentPaymentGroup' },
+    ]
+    const smartVision = (offer: object) => ({
+      productId: '87255',
+      productName: 'Fritadeira Elétrica Airfryer Ichef Smart Vision 6L',
+      brand: 'Ichef',
+      link: '/fritadeira-eletrica-airfryer-ichef-smart-vision-6l/p',
+      items: [{ itemId: '179023', ean: '7909484052723', sellers: [{ sellerId: '1', sellerName: 'Polishop', commertialOffer: offer }] }],
+    })
+
+    it('isearch: o spotPrice é o Pix, então o preço principal JÁ É o do Pix (marca, não desconta de novo)', () => {
+      const [o] = mapVtexProducts(
+        [smartVision({ Price: 555.5, spotPrice: 499.95, ListPrice: 999.9, AvailableQuantity: 10000, Installments: inst(499.95, 555.5), teasers: [] })],
+        'https://www.polishop.com.br'
+      )
+      expect(o).toMatchObject({ price: 499.95, pixPrice: 499.95, cardPrice: 555.5, listPrice: 999.9, gtin: '07909484052723', brand: 'Ichef', notNew: null })
+    })
+
+    it('catálogo (sem spotPrice): o preço principal fica o do cartão e o Pix vai à parte', () => {
+      const [o] = mapVtexProducts(
+        [smartVision({ Price: 555.5, ListPrice: 999.9, AvailableQuantity: 99999, Installments: inst(499.95, 555.5), Teasers: [] })],
+        'https://www.polishop.com.br'
+      )
+      expect(o).toMatchObject({ price: 555.5, pixPrice: 499.95, cardPrice: null })
+    })
+
+    it('Pix 1x igual ao cartão não vira "Preço no Pix"; a regra publicada (teaser) continua valendo', () => {
+      const offer = { Price: 459.9, spotPrice: 459.9, Installments: inst(459.9, 459.9), teasers: [pixTeaserIsearch] }
+      expect(pixPriceFrom(offer, 459.9)).toBe(436.91)
+      expect(pixPriceFrom({ Price: 100, spotPrice: 100, Installments: inst(100, 100) }, 100)).toBeNull()
+    })
+
+    it('desconto à vista que não é o Pix (boleto mais barato) não vira Pix', () => {
+      expect(pixPriceFrom({ Price: 100, spotPrice: 90, Installments: inst(95, 100) }, 90)).toBeNull()
+    })
+
+    it('Pix absurdo (acima de 30%) é ignorado', () => {
+      expect(pixPriceFrom({ Price: 100, Installments: inst(50, 100) }, 100)).toBeNull()
+    })
+  })
+
   it('EAN vazio ou inválido vira null (o anúncio fica fora do catálogo, mas continua sendo coletado)', () => {
     const rows = mapVtexProducts(
       [

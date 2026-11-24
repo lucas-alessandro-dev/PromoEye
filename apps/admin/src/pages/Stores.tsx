@@ -199,8 +199,13 @@ function StoreCard({ store: s, onSaved }: { store: StoreDTO; onSaved: (s: StoreD
   )
 }
 
+/** Busca inicial do teste: "smart tv" dá zero em loja que não vende TV, e parece defeito. */
+const TEST_QUERY: Record<string, string> = {
+  polishop: 'airfryer',
+}
+
 function StoreTestModal({ store, onClose }: { store: StoreDTO; onClose: () => void }) {
-  const [query, setQuery] = useState('smart tv 50')
+  const [query, setQuery] = useState(TEST_QUERY[store.id] ?? 'smart tv 50')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<StoreTestResult | null>(null)
   const [error, setError] = useState<string | null>(null)

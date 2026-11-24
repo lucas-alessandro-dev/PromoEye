@@ -71,6 +71,7 @@ export function mapKabumProducts(products: KabumProduct[]): RawOffer[] {
       gtin: null,
       brand: null,
       modelRef: null,
+      notNew: null,
     })
   }
   return out

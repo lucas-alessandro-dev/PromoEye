@@ -27,6 +27,12 @@ export interface RawOffer {
   brand: string | null
   /** Referência do produto na loja/fabricante, quando vem. */
   modelRef: string | null
+  /**
+   * A própria loja marca a unidade como não nova ("outlet": devolvida, com
+   * marca de uso). O filtro descarta, salvo se a busca do item pedir a palavra.
+   * null = nova ou a loja não informa.
+   */
+  notNew: string | null
 }
 
 export interface SearchOptions {

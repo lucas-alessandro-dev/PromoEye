@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_EXCLUDES } from '@promoeye/shared'
-import { matchTitle, outlierCut, sellerAllowed } from '../apps/server/src/collector/matcher.js'
+import { matchOffer, matchTitle, outlierCut, sellerAllowed } from '../apps/server/src/collector/matcher.js'
 import { normalize, parseBRL, sellerMatches } from '../apps/server/src/lib/text.js'
 import type { RawOffer } from '../apps/server/src/collector/types.js'
 
@@ -89,6 +89,11 @@ const raw = (over: Partial<RawOffer>): RawOffer => ({
   available: true,
   sponsored: false,
   promoLabel: null,
+  pixPrice: null,
+  gtin: null,
+  brand: null,
+  modelRef: null,
+  notNew: null,
   ...over,
 })
 
@@ -106,6 +111,21 @@ describe('sellerAllowed / sellerMatches', () => {
   it('compara por palavra inteira (marca pendurada no nome não passa)', () => {
     expect(sellerMatches('Applestore Importados', ['apple'])).toBe(false)
     expect(sellerMatches('Apple', ['apple'])).toBe(true)
+  })
+})
+
+describe('matchOffer — unidade que a loja marca como não nova', () => {
+  const airfryer = { query: 'airfryer ichef', mustInclude: [], mustExclude: [], minPrice: null, globalExcludes: DEFAULT_EXCLUDES }
+  const title = 'Fritadeira Elétrica Airfryer Ichef Smart Vision 6L - Outlet'
+  it('outlet da Polishop fica de fora, com o motivo, mesmo sem "outlet" nas exclusões salvas', () => {
+    const v = matchOffer(raw({ title, notNew: 'outlet' }), airfryer)
+    expect(v).toEqual({ ok: false, reason: 'não é novo (a loja marca como "outlet")' })
+  })
+  it('entra quando a própria busca pede outlet', () => {
+    expect(matchOffer(raw({ title, notNew: 'outlet' }), { ...airfryer, query: 'airfryer ichef outlet' }).ok).toBe(true)
+  })
+  it('produto novo passa', () => {
+    expect(matchOffer(raw({ title: 'Fritadeira Elétrica Airfryer Ichef Smart Vision 6L' }), airfryer).ok).toBe(true)
   })
 })
 

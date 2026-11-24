@@ -36,7 +36,7 @@ No painel, em **Itens → Novo item**:
 
 - **Busca**: o que é digitado na busca de cada loja (`iphone 16 128gb`).
 - **Termos obrigatórios**: todos precisam aparecer no título, como palavra inteira. `16` não casa com `16e`. Use `|` para alternativas: `fryer|fritadeira`. "128 GB" e "128GB" são tratados como iguais.
-- **Termos excluídos**: descartam o anúncio (`pro`, `plus`, `max`). Capa, película, usado, vitrine, recondicionado e afins já são excluídos por padrão em **Configurações**.
+- **Termos excluídos**: descartam o anúncio (`pro`, `plus`, `max`). Capa, película, usado, vitrine, recondicionado e afins já são excluídos por padrão em **Configurações**. Produto que a própria loja marca como **outlet** (na Polishop: devolvido por cliente, com pequeno defeito estético) fica de fora sempre, salvo se a busca do item pedir "outlet".
 - **Preço mínimo**: abaixo dele é acessório ou erro.
 - **Preço-alvo**: abaixo dele a oferta vira promoção, mesmo sem histórico.
 - **Testar busca**: roda ao vivo e mostra o que entraria e o que ficaria de fora, **com o motivo**. Use antes de salvar.
@@ -96,7 +96,10 @@ O item ("Air fryer 4L") junta tudo o que casou com uma busca. O **produto** (`Pr
 
 O preço principal de cada oferta (`price`) é a base do histórico e das comparações, e **não mudou**. O Pix fica num campo à parte (`pixPrice`):
 
-- **VTEX**: lido da regra que a loja publica ("Desconto PGTO Pix - 5%"). Só vale a regra de desconto percentual para Pix em 1x, sem outra condição (cupom, grupo de cliente). Se o `spotPrice` já tiver desconto, não descontamos de novo.
+- **VTEX**, nesta ordem:
+  1. A tabela de parcelas que a loja calculou (`Installments`, linha "Pix" em 1x). Se o Pix é igual ao preço principal e menor que o do cartão, o preço principal **já é** o do Pix (o `spotPrice`): a vitrine escreve "Preço no Pix" e o cartão vai à parte. É o caso da Polishop, da Mondial e da iByte. Se o Pix é menor que o preço principal (API de catálogo, sem `spotPrice`), ele vai à parte.
+  2. A regra que a loja publica ("Desconto PGTO Pix - 5%", como na Britânia). Só vale a de desconto percentual para Pix em 1x, sem outra condição (cupom, grupo de cliente). Se o `spotPrice` já tiver desconto, não descontamos de novo.
+  - Pix mais de 30% abaixo é ignorado (erro de cadastro).
 - **KaBuM!**: o preço principal já é o do Pix (`price_with_discount`), e o cartão vai em `cardPrice`.
 - A vitrine mostra "R$ X no Pix" e "R$ Y no cartão".
 
